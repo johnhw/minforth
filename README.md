@@ -2,9 +2,10 @@
 
 Derived from [pijFORTHos], in turn based on [_Jonesforth-ARM_](https://github.com/M2IHP13-admin/JonesForth-arm).
 
-_Jonesforth-ARM_ is an ARM port, by M2IHP'13 class members listed in `AUTHORS`, of _x86 JonesForth_.
+_Jonesforth-ARM_ is an ARM port, by M2IHP'13 class members listed in `AUTHORS`, of _x86 JonesForth_. Much of the bare metal code
+was modified from [dwelch67]'s excellent bare metal tutorials.
 
-The major difference with pijFORTHos is a much more minimal ASM kernel (just 3k), and no C code. The kernel does *just* enough to bootstrap FORTH. 
+The major difference with pijFORTHos is a really minimal ASM kernel (just 3k), and no C code. The kernel does *just* enough to bootstrap FORTH. 
 
 ## Instructions
 
@@ -21,9 +22,24 @@ You can simply paste (Ctrl-a Ctrl-y in Minicom) in after entering UPLOAD and the
 BOOT will start the new kernel and reload it. 
 
 As in pijFORTHos, you can connect over serial with the port settings 115200-8-N-1. If you use minicom, the supplied
-script hex.scr recompiles, and then uses the bootloader to upload the new kernel and reboots.
+script hex.scr recompiles, and then uses the bootloader to upload the new kernel and reboots. Configure minicom to use
+ANSI color, as minFORTH use ANSI codes to display colored text, clear the screen etc.
 
+## Running
+If you connect via the UART and boot the board, you should see:
 
+    <PRESS ENTER>
+    
+press enter and you will see:
+                           ____    _____   ____    ______  __  __
+                __        /\  _`\ /\  __`\/\  _`\ /\__  _\/\ \/\ \
+       ___ ___ /\_\    ___\ \ \L\_\ \ \/\ \ \ \L\ \/_/\ \/\ \ \_\ \
+     /' __` __`\/\ \ /' _ `\ \  _\/\ \ \ \ \ \ ,  /  \ \ \ \ \  _  \
+     /\ \/\ \/\ \ \ \/\ \/\ \ \ \/  \ \ \_\ \ \ \\ \  \ \ \ \ \ \ \ \
+     \ \_\ \_\ \_\ \_\ \_\ \_\ \_\   \ \_____\ \_\ \_\ \ \_\ \ \_\ \_\
+      \/_/\/_/\/_/\/_/\/_/\/_/\/_/    \/_____/\/_/\/ /  \/_/  \/_/\/_/
+
+  
 
 
 Original pijFORTHos documentation:

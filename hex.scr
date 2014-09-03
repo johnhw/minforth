@@ -1,5 +1,5 @@
 print "Compiling kernel...\n"
-! cd ~/pf ; make clean ; make
+! cd ~/pf/minforth ; make clean ; make
 print "Compiled!\n"
 send "\n\n\n\n"
 print "Uploading to device...\n"

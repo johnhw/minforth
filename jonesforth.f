@@ -159,8 +159,6 @@ CHAR : LATEST @ @ 4+ 1+ C!
 	THEN
 ;
 
-." Booting..."
-
 : DROPALL S0 @ DSP! ;
 : ?STACK S0 @ DSP@ <= IF DROPALL ." Stack underflow!"  THEN ;
 
@@ -228,7 +226,6 @@ QUIT
 : .R DOT ROT OVER - SPACES TELL ;
 : . DOT TELL BL EMIT ;
 
-." Signed numbers..."
 \ Base switching 
 : 16# BASE @ 16 BASE ! WORD NUMBER DROP SWAP BASE ! ;
 : 10# BASE @ 10 BASE ! WORD NUMBER DROP SWAP BASE ! ;
@@ -279,7 +276,7 @@ IF NEGATE 1- SWAP ROT SWAP - ELSE ROT DROP THEN ;
     DUP 0<= 
     UNTIL ;
 
-." Introspection..."    CR
+
 \ Original JONESFORTH introspection functions        
 : DICT WORD FIND ;
 : VALUE ( n -- ) WORD CREATE DOCOL , ' LIT , , ' EXIT , ;
@@ -294,7 +291,7 @@ IF NEGATE 1- SWAP ROT SWAP - ELSE ROT DROP THEN ;
 : ID. 4+ COUNT F_LENMASK AND BEGIN DUP 0> WHILE SWAP COUNT EMIT SWAP 1- REPEAT 2DROP ;
 : ?HIDDEN 4+ C@ F_HIDDEN AND ;
 : ?IMMEDIATE 4+ C@ F_IMMED AND ;
-: WORDS LATEST @ BEGIN ?DUP WHILE DUP ?HIDDEN NOT IF DUP ID. SPACE THEN @ REPEAT CR ;
+: WORDS LATEST @ BEGIN ?DUP WHILE DUP ?HIDDEN NOT IF DUP ID. SPACE ." 0x" DUP . CR THEN @ REPEAT CR ;
 : FORGET DICT DUP @ LATEST ! HERE ! ;
 : CFA> LATEST @ BEGIN ?DUP WHILE 2DUP SWAP < IF NIP EXIT THEN @ REPEAT DROP 0 ;
 : SEE
@@ -344,14 +341,6 @@ IF NEGATE 1- SWAP ROT SWAP - ELSE ROT DROP THEN ;
 : UNUSED ( -- n ) PAD HERE @ - 4/ ;
 
 
-\ Welcome
-: WELCOME
-	S" TEST-MODE" FIND NOT IF
-		." JONESFORTH VERSION " VERSION . CR
-		UNUSED . ." CELLS REMAINING" CR
-		." OK "
-	THEN
-;
 
 \ Hex dumping of memory
 : BAR [ CHAR | ] LITERAL EMIT ; 
@@ -376,8 +365,6 @@ IF NEGATE 1- SWAP ROT SWAP - ELSE ROT DROP THEN ;
     BASE !
 ;
 
-
-." Dumping..."    
 
 \ ANSI codes
 27 CONSTANT ESC
@@ -410,7 +397,7 @@ VARIABLE ANSI_BG_SET
 : ANSI_DEFAULT 37 ANSICOLOR 40 ANSICOLOR ;
 : ANSI_ERROR ANSI_BLACK ANSI_BG ANSI_RED ANSI_FG ;
 
-." ANSI interpret loop..." CR    
+
 VARIABLE OLD_STATE 0 OLD_STATE !
 : INTERPRET
     ?STACK
@@ -464,7 +451,6 @@ TIMER_BASE 20 + CONSTANT TIMER_CNT
 DECIMAL
 : TIMER_SECONDS TIMER_READ 1000000 / ;
 
-." Timer..."    CR
 
 \ Load a hex block from the stream. Terminate with non-number
 16# 100000 CONSTANT UPLOAD_ADDRESS
@@ -473,10 +459,10 @@ DECIMAL
 VARIABLE BOOT_ADDRESS
 : BOOT UPLOAD_ADDRESS BOOT_ADDRESS ! BOOT_ADDRESS EXECUTE ;
 
+\ quote that works in immediate mode
 : QUOTE WORD FIND >CFA ( -- xt ) ;
 : BACKPATCH QUOTE QUOTE 4+ ! ;
 
-." Bootloader..."    CR
 \ allow input redirection by redefining INPUT-STREAM
 \ INPUT-STREAM points at a word that retrieves one more character from the input
 \ OUTPUT-STREAM points at a word that outputs a single character
@@ -487,7 +473,6 @@ VARIABLE OUTPUT-STREAM QUOTE UARTEMIT OUTPUT-STREAM !
 BACKPATCH NKEY KEY
 \ BACKPATCH NEMIT EMIT
 
-." Input streams..."    CR
 \ rewrite WORD to use the new KEY function
 : CINC DUP C@ 1+ SWAP C! ;
 : CDEC DUP C@ 1- SWAP C! ;
@@ -540,7 +525,9 @@ TIB# 1+ CONSTANT TIB
 VARIABLE TIB_CURSOR 
 VARIABLE ESCAPE_STATE 
 
-: CLEAR_TIB 0 TIB# C! 0 TIB_CURSOR ! ; 
+
+VARIABLE >IN 0 >IN !
+: CLEAR_TIB 0 TIB# C! 0 TIB_CURSOR ! 0 >IN ! ; 
 : ECHO UARTKEY DUP EMIT ;
 : CURSOR_LEFT TIB_CURSOR CDEC ;
 : CURSOR_RIGHT TIB_CURSOR CINC ;
@@ -574,11 +561,12 @@ VARIABLE ESCAPE_STATE
         \ ESCAPE_CHAR
     \ THEN 
     ;
-: READ_LINE CLEAR_TIB BEGIN IN_CHAR NL = UNTIL  ;
+: ACCEPT CLEAR_TIB BEGIN IN_CHAR OVER = UNTIL DROP ;
+: READ_LINE NL ACCEPT ;
 
 : CHARAT ( addr ix -- c) + 1+ C@ ;
 
-VARIABLE >IN 0 >IN !
+
 ( make line buffered input the outer interpreter )
 : LINE_KEY
     ( get some characters )
@@ -588,12 +576,13 @@ VARIABLE >IN 0 >IN !
     >IN @ TIB# LENSTR >= IF CLEAR_TIB THEN 
 ;
 
-\ QUOTE LINE_KEY INPUT-STREAM !
+
 
 \ left, right
 \ home, end
 \ ins/over
 \ up/down buffer
+
 
 : WELCOME ANSI_BLUE ANSI_BG ANSI_CLS ANSI_YELLOW ANSI_FG
 S"                                                      
@@ -604,10 +593,16 @@ S"
  /\ \/\ \/\ \ \ \/\ \/\ \ \ \/  \ \ \_\ \ \ \\ \  \ \ \ \ \ \ \ \
  \ \_\ \_\ \_\ \_\ \_\ \_\ \_\   \ \_____\ \_\ \_\ \ \_\ \ \_\ \_\
   \/_/\/_/\/_/\/_/\/_/\/_/\/_/    \/_____/\/_/\/ /  \/_/  \/_/\/_/
-" TELL
+" TELL CR
+." 0x" UNUSED . ." CELLS FREE" 8 SPACES HEX ." RSP:0x" RSP@ . 4 SPACES ." DSP:0x" DSP@ . 4 SPACES ." S0: 0x" S0 @ . 
+CR ." READY"
+CR
+DECIMAL
 ;
 
-." Welcome..."    CR
+
+\ experimental stuff
+
 : MAPCHAR NEXTCHAR 3 PICK EXECUTE ROT DUP -ROT 1- C! SWAP ( xt addr len -- xt addr+1 len-1 ) ; 
 : MAPSTR 2 PICK 2 PICK BEGIN MAPCHAR DUP 0= UNTIL DROP DROP DROP ( addr len xt -- addr len ) ;
 : +13 13 + ;
@@ -626,9 +621,11 @@ S"
     DIVSTEP   
 ;
 
+\ redirect input
+
 WELCOME
-: ECHOKEY UARTKEY DUP EMIT ;
-QUOTE ECHOKEY INPUT-STREAM !
+CLEAR_TIB
+QUOTE UARTEKEY INPUT-STREAM !
 
 \ ARM opcodes
 \ : BIN-> BASE @ BINARY WORD NUMBER CONSTANT BASE ! ;
@@ -650,7 +647,6 @@ QUOTE ECHOKEY INPUT-STREAM !
 \ signed division
 \ color change on : 
 \ line editor
-\ ansi colors
 \ quotations
 \ read-line as accept (char to terminate)
 \ private namespaces

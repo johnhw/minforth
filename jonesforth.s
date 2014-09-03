@@ -433,7 +433,7 @@ defcode "FIP!",4,,FIPSTORE
     .global srcptr
     srcptr: .int _binary_jonesforth_f_start
     
-    @ read one character from the pre-loaded sourceblcok
+    @ read one character from the pre-loaded source bl
 srcchar:
     ldr r1, =srcptr
     ldr r2, [r1]
@@ -486,34 +486,6 @@ _WORD:
 2:
         strb r0, [r6], #1        @ store character in word buffer
         bl srcchar               @ read more characters until a space is found
-        cmp r0, #' '
-        bgt 2b
-
-        ldr r0, =word_buffer    @ r0, address of word
-        sub r1, r6, r0          @ r1, length of word
-
-        ldmfd sp!, {r6,lr}      @ restore r6 and lr
-        bx lr
-
-               
-@ WORD ( -- addr length ) reads next word from stdin
-@ skips spaces, control-characters and comments, limited to 32 characters
-defcode "UARTWORD",8,,UARTWORD
-        bl _UWORD
-        PUSHDSP r0               @ address
-        PUSHDSP r1               @ length
-        NEXT
-_UWORD:
-        stmfd   sp!, {r6,lr}     @ preserve r6 and lr
-1:
-        bl getchar                  @ read a character        
-        cmp r0, #' '
-        ble 1b                   @ skip blank character
-
-        ldr     r6, =word_buffer
-2:
-        strb r0, [r6], #1        @ store character in word buffer
-        bl getchar                  @ read more characters until a space is found
         cmp r0, #' '
         bgt 2b
 
