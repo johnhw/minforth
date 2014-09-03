@@ -1,0 +1,12 @@
+print "Compiling kernel...\n"
+! cd ~/pf ; make clean ; make
+print "Compiled!\n"
+send "\n\n\n\n"
+print "Uploading to device...\n"
+send "UPLOAD\n"
+! cat kernel.hex > /dev/ttyAMA0
+print "\nUploaded; rebooting..."
+send "BOOT\n"
+send "BOOT\n"
+print "Reboot complete.\n"
+

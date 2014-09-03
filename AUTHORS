@@ -1,0 +1,28 @@
+Minimised minforth version:
+John Williamson <johnhw@gmail.com>
+
+Bare-metal Raspberry Pi port by:
+
+Dale Schumacher <dale.schumacher@gmail.com>
+Tristan Slominski <tristan.slominski@gmail.com>
+
+M2IHP'13 class Contributors:
+
+ABECASSIS Felix
+BISPO VIEIRA Ricardo
+BLANC Benjamin
+BORDESSOULES Arthur
+BOUDJEMAI Yassine
+BRICAGE Marie
+ETSCHMANN Marc
+GAYE Ndeye Aram
+GONCALVES Thomas
+GOUGEAUD Sebastien
+HAINE Christopher
+OLIVEIRA Pablo
+PLAZA ONATE Florian
+POPOV Mihail
+
+Original x86/FORTH Literate Code by:
+
+Richard W.M. Jones <rich@annexia.org>

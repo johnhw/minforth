@@ -1,0 +1,14 @@
+
+MEMORY
+{
+    arm : ORIGIN = 0x8000, LENGTH = 0xC000000
+}
+
+SECTIONS
+{
+    .text : { *(.text*) } > arm
+    .rodata : { *(.rodata*) } > arm
+    .data : { *(.data*) } > arm
+    .bss : { *(.bss*) } > arm
+}
+
