@@ -426,7 +426,70 @@ defcode "FIP!",4,,FIPSTORE
         mov FIP, r0
         NEXT
 
-
+defcode "HASH",4,,HASH
+    POPDSP r1
+    POPDSP r0
+    bl murmur_hash
+    PUSHDSP r0
+    NEXT
+        
+@ Compute the murmur3 hash of a string.
+@ string in r0, len in r1, return in r0
+.globl murmur_hash    
+murmur_hash:
+    ldr r6, =0xcc9e2d51
+    ldr r7, =0x1b873593
+    ldr r8, =0xe6546b64
+    ldr r5, =0              @ hash    
+    push {r1}
+    
+block_loop:    
+        ldr r2, [r0]        @ k = blocks[i]        
+        add r0, #4
+        sub r1, #4
+        mul r2, r6          @ *= c1
+        mov r2, r2, ROR #32-15     @ rotl(k, 15)
+        mul r2, r7          @ *=c2
+        eor r5, r2          @ hash ^ = k
+        mov r5, r5, ROR #32-13     @ hash = rotl(hash, 13)
+        ldr r4, =5          @ hash = hash * m + n
+        mul r5, r4
+        add r5, r8        
+        cmp r1, #3          @ loop if not finished
+        bgt block_loop
+            
+    @ -r1 is left over characters    
+    cmp r1, #0
+    beq finalise            @ can finalise if len%4==0    
+    ldr r2, [r0]        
+    
+    cmp r1, #3    
+    andeq r2, #0x00ffffff   @ hash the tail
+    
+    cmp r1, #2
+    ldr r3, =0x0000ffff
+    andeq r2, r3
+    
+    cmp r1, #1
+    andeq r2, #0x000000ff               
+    
+    mul r2, r6      @ *= c1
+    mov r2, r2, ROR #32-15     @ rotl(k, 15)
+    mul r2, r7      @ *=c2
+    eor r5, r2      @ hash ^ = k
+    
+finalise:        
+    pop {r1}
+    eor r5, r1
+    eor r5, r5, LSR #16
+    ldr r0, =0x085ebca6b
+    mul r5, r0
+    eor r5, r5, LSR #13
+    ldr r0, =0xc2b2ae35
+    mul r5, r0
+    eor r5, r5, LSR #16    
+    mov r0, r5              @ return hash
+    bx lr   
         
 .data
     .align 2
@@ -453,13 +516,7 @@ defcode "UARTKEY",7,,UARTKEY
         bl _getchar
         PUSHDSP r0        
         NEXT
-        
-@ UARTKEY ( -- c ) Read an unbuffered character from the UART
-defcode "UARTEKEY",8,,UARTEKEY
-        bl getchar
-        PUSHDSP r0        
-        NEXT
-                
+                       
         
 @ UARTEMIT ( -- c ) Read an unbuffered character from the UART
 defcode "UARTEMIT",8,,UARTEMIT

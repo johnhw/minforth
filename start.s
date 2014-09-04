@@ -226,10 +226,8 @@
         ldr r3, [r0]
         ldr r2, [r1]        @ while rxtail==rxhead
         cmp r2, r3    
-        beq uart_getc_wait    
-        
-        ldr r3, =rxbuffer   @ c=rxbuffer[rxtail]    
-        ldr r3, [r3]
+        beq uart_getc_wait            
+        ldr r3, =rxbuffer   @ c=rxbuffer[rxtail]            
         ldrb r0, [r3,r2]
         add r2, #1          @ rxtail = (rxtail+1)&RXBUFMASK
         lsl     r2, r2, #20
@@ -277,16 +275,6 @@
         pop {lr}
         bx lr
     
-@ Get one character, with echo
-    .global getchar
-    getchar:
-        push {lr}
-        bl uart_getc    
-        cmp r0, #13
-        ldreq r0, =10
-        bl putchar
-        pop {lr}
-        bx lr    
         
 @ IRQ handler    
 @ Just writes characters from the UART into a circular buffer, which can
@@ -304,8 +292,7 @@
         cmp r0, #4
         bne irq_start           @ loop, if it's not UART interrupt
         GET32 AUX_MU_IO_REG
-        ldr r1, =rxbuffer
-        ldr r1, [r1]
+        ldr r1, =rxbuffer        
         ldr r2, =rxhead
         ldr r3, [r2]
         uxtb r0, r0
