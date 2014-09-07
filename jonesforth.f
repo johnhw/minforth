@@ -51,14 +51,14 @@
 : ALLOT HERE @ SWAP HERE +! ;
 : CELLS 4* ;
 : VARIABLE 1 CELLS ALLOT WORD CREATE DOCOL , ' LIT , , ' EXIT , ;
-
+: VARIABLE: VARIABLE LATEST @ >CFA EXECUTE ! ;
 : >DFA >CFA 4+ ;
 : IMMEDIATE LATEST @ 4+ C@ F_IMMED OR LATEST @ 4+ C! ;
 LATEST @ 4+ C@ F_IMMED OR LATEST @ 4+ C!       
 
 : HIDDEN 4+ DUP C@ F_HIDDEN XOR SWAP C! ;
 : +HIDDEN 4+ DUP C@ F_HIDDEN OR SWAP C! ;
-: UNHIDE 4+ DUP C@ F_HIDDEN INVERT AND SWAP C! ;
+: -HIDDEN 4+ DUP C@ F_HIDDEN INVERT AND SWAP C! ;
 : CHAR WORD DROP C@ ;
 : [COMPILE] IMMEDIATE WORD FIND >CFA , ;
 : ~ WORD CREATE DOCOL , LATEST @ HIDDEN ]] ;
@@ -161,28 +161,29 @@ CHAR : LATEST @ @ 4+ 1+ C!
 	THEN
 ;
 
+
 : DROPALL S0 @ DSP! ;
 : ?STACK S0 @ DSP@ <= IF DROPALL ." Stack underflow!"  THEN ;
 : COUNT DUP 1+ SWAP C@  ;
 : ID. 4+ COUNT F_LENMASK AND BEGIN DUP 0> WHILE SWAP COUNT EMIT SWAP 1- REPEAT 2DROP ;
 
+
 : INTERPRET    
-    WORD 2DUP FIND DUP 0= 
+    WORD  2DUP FIND DUP 0= 
         IF 
-        DROP 2DUP NUMBER ( must be a number or invalid token )
+        DROP 2DUP NUMBER ( must be a number or invalid token ) 
         0<> IF
             DROP          
-            ." Unknown word <"
-            TELL          ( error! unknown word not compiling )
+            ." Unknown word <" ( unknown ) 
+            TELL          
             ." >"                         
             ELSE 
-                NIP NIP
+                NIP NIP 
                 STATE @ IF ' LIT , , THEN                
             THEN
         ELSE 
             NIP NIP             
-            DUP 4+ C@ F_IMMED AND 0<> IF >CFA EXECUTE ELSE 
-            ( not immediate )
+            DUP 4+ C@ F_IMMED AND 0<> IF >CFA EXECUTE ELSE             
             >CFA STATE @ IF , ELSE EXECUTE THEN             
             THEN        
         THEN
@@ -198,6 +199,8 @@ QUIT
 
 ( some character constants )
 : '\n' 10 ;
+: BKSP 8 ;
+: NL 10 ;
 : '\t' 9 ;
 : BL 32 ;
 : CR 10 EMIT ;
@@ -210,6 +213,13 @@ QUIT
 : \ IMMEDIATE BEGIN KEY '\n' = UNTIL ;
 
 
+\ standard words
+: ON TRUE SWAP ! ;
+: OFF FALSE SWAP ! ;
+: MAX 2DUP > IF DROP ELSE SWAP DROP THEN ;
+: MIN 2DUP <= IF DROP ELSE SWAP DROP THEN ;
+: CLIP ( c a b -- c ) ROT MIN MAX ;
+: ABS DUP 0< IF NEGATE THEN ;
 : WITHIN -ROT OVER <= IF > IF TRUE ELSE FALSE THEN ELSE 2DROP FALSE THEN ;
 : ISLETTER DUP ISALPHA SWAP ISLOWERALPHA OR ;
 : DEPTH DSP@ S0 @ - 2 RSHIFT ;
@@ -217,6 +227,16 @@ QUIT
 : NALIGNED ( val n -- val_aligned ) 1 SWAP LSHIFT 1- DUP ROT + SWAP INVERT AND ; 
 : NALIGN ( n -- ) HERE @ SWAP NALIGNED HERE ! ;
 : BUFFER ALLOT CONSTANT ;
+: C++ DUP C@ 1+ SWAP C! ;
+: C-- DUP C@ 1- SWAP C! ;
+: ++ DUP @ 1+ SWAP ! ;
+: -- DUP @ 1- SWAP ! ;
+: ->CELL 4 SWAP +! ;
+: <-CELL 4 SWAP -! ;
+: ->C 1 SWAP +! ;
+: <-C 1 SWAP -! ;
+
+
 
 
 
@@ -224,10 +244,6 @@ QUIT
 \ write out unsigned numbers
 64 BUFFER  NUMPAD
 63 NUMPAD + CONSTANT TOPPAD
-: C++ DUP C@ 1+ SWAP C! ;
-: C-- DUP C@ 1- SWAP C! ;
-: ++ DUP @ 1+ SWAP ! ;
-: -- DUP @ 1- SWAP ! ;
 : WRITECHAR TOPPAD C++ TOPPAD TOPPAD C@ - C! ;
 : DIGIT DUP 10 >= IF 55 + WRITECHAR ELSE '0' + WRITECHAR THEN ;
 : PUSHPAD TOPPAD TOPPAD C@ - TOPPAD C@ ;
@@ -247,6 +263,7 @@ QUIT
 : ? @ . ;
 
 
+
 \ Base switching 
 : # ( b -- n ) BASE @ SWAP BASE ! WORD NUMBER DROP SWAP BASE ! ;
 : 16# 16 # ;
@@ -258,6 +275,23 @@ QUIT
 : HEX 16 BASE ! ;
 : DECIMAL 10 BASE ! ;
 
+
+
+
+\ binary manipulation
+: .BIN BASE @ SWAP BINARY . BASE ! ;
+: .HEX BASE @ SWAP HEX . BASE ! ;
+: .OCTAL BASE @ SWAP OCTAL . BASE ! ;
+: CLEARMASK INVERT AND ;
+: SETMASK OR ;
+: BITRANGE SWAP DUP -ROT - 1 SWAP LSHIFT 1- SWAP LSHIFT ;
+: CLEARBITS BITRANGE CLEARMASK ;
+: SETBITS BITRANGE SETMASK ;
+: SETBIT NTHBIT OR ;
+: CLEARBIT NTHBIT INVERT AND ;
+
+
+
 \ Private namespaces
 VARIABLE HIDDEN_BLOCK
 VARIABLE REVEAL_BLOCK
@@ -265,6 +299,7 @@ VARIABLE REVEAL_BLOCK
 : {{ LATEST @ HIDDEN_BLOCK ! 0 REVEAL_BLOCK ! ;
 : PUBLIC: LATEST @ REVEAL_BLOCK ! ;
 : }} REVEAL_BLOCK @ DUP 0= IF DROP LATEST THEN BEGIN @ DUP +HIDDEN DUP HIDDEN_BLOCK @ = UNTIL DROP ;
+
 
 \ stack printing
 VARIABLE TSP
@@ -283,23 +318,12 @@ VARIABLE TSP
 : QIFFALSE IF DROP ELSE EXECUTE THEN ;
 : QWHILE >R BEGIN R> DUP >R EXECUTE INVERT UNTIL R> DROP ; 
 : QUNTIL >R BEGIN R> DUP >R EXECUTE UNTIL R> DROP ; 
-\ : QTIMES >R >R  BEGIN R> DUP >R EXECUTE  R> R> 1- -ROT >R >R 0= UNTIL R> R> DROP DROP ; 
-\ : ITER >R >R  BEGIN R> DUP >R EXECUTE  R> R> 1- -ROT >R >R 0= UNTIL R> R> DROP DROP ; 
+\ : QTIMES >R 0 DO R> DUP >R EXECUTE LOOP R> DROP ;
+\ : ITER >R 0 DO R> DUP >R I EXECUTE LOOP R> DROP ;
 \ : ITERD >R >R  BEGIN R> DUP >R EXECUTE  R> R> 1- -ROT >R >R 0= UNTIL R> R> DROP DROP ; 
 : QPRESERVE DUP >R @ >R  EXECUTE R> R> SWAP ! ;
 : QDIP >R EXECUTE R> ;
 : QSIP DUP >R EXECUTE R> ;
-: VARIABLE: VARIABLE LATEST @ >CFA EXECUTE ! ;
-
-
-
-\ standard words
-: ON TRUE SWAP ! ;
-: OFF FALSE SWAP ! ;
-: MAX 2DUP > IF DROP ELSE SWAP DROP THEN ;
-: MIN 2DUP <= IF DROP ELSE SWAP DROP THEN ;
-: CLIP ( c a b -- c ) ROT MIN MAX ;
-: ABS DUP 0< IF NEGATE THEN ;
 
 
 \ Original JONESFORTH introspection functions        
@@ -373,9 +397,6 @@ VARIABLE TSP
 
 
 
-
-
-
 \ Hex dumping of memory
 : BAR [[ CHAR | ]] LITERAL EMIT ; 
 : HEX_ADDRESS DUP 8 SWAP U.ZR  ;
@@ -399,8 +420,26 @@ VARIABLE TSP
     BASE !
 ;
 
+
+
+\ Counted loops
+32 CELLS ALLOT VARIABLE: LOOPSP
+LOOPSP @ CONSTANT LOOPTOP
+: >LOOP LOOPSP @ ! LOOPSP ->CELL ;
+: LOOP> LOOPSP <-CELL LOOPSP @ @ ; 
+: DO IMMEDIATE ' >LOOP , ' >LOOP , [COMPILE] BEGIN ;
+: LOOPCHECK LOOP> LOOP> 1+  2DUP =  -ROT >LOOP >LOOP ;
+: +LOOPCHECK LOOP> LOOP> ROT + 2DUP <=  -ROT >LOOP >LOOP ;
+: LOOPFINISH LOOP> DROP LOOP> DROP ;
+: LOOP IMMEDIATE ' LOOPCHECK , [COMPILE] UNTIL ' LOOPFINISH , ;
+: +LOOP IMMEDIATE ' +LOOPCHECK , [COMPILE] UNTIL ' LOOPFINISH , ;
+: I LOOPTOP @  ;
+: J LOOPTOP 8 + @  ;
+
 \ append a character to a string on the stack; must be enough room in the buffer
 : SUFFIX 1+ SWAP OVER + ROT SWAP -ROT C! SWAP ;
+
+
 
 \ ANSI codes
 
@@ -455,7 +494,6 @@ TIMER_BASE 16# 20 + CONSTANT TIMER_CNT
     DROP
 ;
 
-DECIMAL
 : TIMER_SECONDS TIMER_READ 1000000 / ;
 
 
@@ -470,6 +508,15 @@ VARIABLE BOOT_ADDRESS
 : QUOTE WORD FIND >CFA ( -- xt ) ;
 : BACKPATCH QUOTE QUOTE 4+ ! ;
 
+\ UART
+5 NTHBIT CONSTANT UART_READY_MASK
+16# 20215040 CONSTANT AUX_MU_IO_REG
+16# 20215054 CONSTANT AUX_MU_LSR_REG
+: UARTPUTC BEGIN AUX_MU_LSR_REG @ UART_READY_MASK AND 0<> UNTIL AUX_MU_IO_REG C! ;
+: UARTEMIT DUP NL = IF 13 UARTPUTC THEN UARTPUTC ;
+
+
+
 \ allow input redirection by redefining INPUT-STREAM
 \ INPUT-STREAM points at a word that retrieves one more character from the input
 \ OUTPUT-STREAM points at a word that outputs a single character
@@ -480,13 +527,13 @@ VARIABLE OUTPUT-STREAM QUOTE UARTEMIT OUTPUT-STREAM !
 BACKPATCH NKEY KEY
 BACKPATCH NEMIT EMIT
 
+
 \ rewrite WORD to use the new KEY function
 : APPEND ( c addr -- ) DUP C++ DUP C@ + C! ;
 : DELETE ( addr -- ) DUP C@ 0> IF C-- THEN ;
 : CLEARSTR 0 SWAP C! ;
 : PUSHSTR DUP C@ SWAP 1+ SWAP ;
 : LENSTR C@ ;
-
 : CMP 2DUP = IF 0 ELSE > IF -1 ELSE 1 THEN THEN ;
 : CMPCHAR DUP C@ 2 PICK C@ CMP ;
 : 3DROP DROP DROP DROP ;
@@ -496,7 +543,7 @@ BACKPATCH NEMIT EMIT
 : TELLSTR PUSHSTR TELL ;
 : ISBLANK DUP BL = OVER '\n' = OR OVER '\t' = OR NIP ;
 : SKIPSPACE BEGIN KEY DUP ISBLANK NOT UNTIL ;
-32 ALLOT CONSTANT WORDBUFFER#
+32 ALLOT CONSTANT WORDBUFFER# 
 WORDBUFFER# 1+ CONSTANT WORDBUFFER
 : NWORD
   WORDBUFFER# CLEARSTR
@@ -509,7 +556,7 @@ WORDBUFFER# 1+ CONSTANT WORDBUFFER
 ( backpatch word to actually execute nword )
 BACKPATCH NWORD WORD
 
-
+\ basic linked list/stack
 : MK() 2 CELLS ALLOT DUP 4+ 0 ! ( -- listptr[val,ptr] ) ;
 : NIL 0 ;
 : CONS MK()  DUP -ROT ! DUP ROT SWAP 4+ ! ;
@@ -518,10 +565,6 @@ BACKPATCH NWORD WORD
 : PRINTLIST BEGIN DUP CAR . DUP CDR 0= IF DROP TRUE ELSE CDR FALSE THEN UNTIL ;
 : LASTLIST BEGIN DUP CDR 0= IF TRUE ELSE CDR FALSE THEN UNTIL ;
 : MAKE_ENDLESS DUP DUP LASTLIST 4+ ! ;
-
-\ Line editor
-: BKSP 8 ;
-: NL 10 ;
 
 \ 16 CONSTANT HISTORY_LINES
 \ VARIABLE HISTORY_PTR 
@@ -562,6 +605,8 @@ VARIABLE >IN 0 >IN !
 \ buffer for ansi value field    
 32 BUFFER ESCAPE_BUF
 
+
+
 VARIABLE TABPTR
 : RESET_TAB LATEST @ TABPTR ! ;
 \ find first space character, moving rightwards
@@ -577,7 +622,6 @@ VARIABLE TABPTR
 : READ_LINE NL ACCEPT ;
 
 : CHARAT ( addr ix -- c) + 1+ C@ ;
-
 
 ( make line buffered input the outer interpreter )
 : LINE_KEY
@@ -612,16 +656,6 @@ CR
 DECIMAL
 ;
 
-\ binary manipulation
-
-: .BIN BASE @ SWAP BINARY . BASE ! ;
-: CLEARMASK INVERT AND ;
-: SETMASK OR ;
-: BITRANGE SWAP DUP -ROT - 1 SWAP LSHIFT 1- SWAP LSHIFT ;
-: CLEARBITS BITRANGE CLEARMASK ;
-: SETBITS BITRANGE SETMASK ;
-: SETBIT NTHBIT OR ;
-: CLEARBIT NTHBIT INVERT AND ;
 
 
 
@@ -655,6 +689,9 @@ VARIABLE GPIO_REG
 : LEDON LED_GPIO GPIO_ON ;
 : LEDOFF LED_GPIO GPIO_OFF ;
 
+
+
+    
 \ experimental stuff
 
 ( signed division )
@@ -689,20 +726,7 @@ DUP 0< IF NEGATE -ROT INVERT ELSE -ROT THEN -ROT /MOD ROT
 IF NEGATE 1- SWAP ROT SWAP - ELSE ROT DROP THEN ;
 
 
-32 CELLS ALLOT VARIABLE: LOOPSP
-LOOPSP @ CONSTANT LOOPTOP
-: ->CELL 4 SWAP +! ;
-: <-CELL 4 SWAP -! ;
-: >LOOP LOOPSP @ ! LOOPSP ->CELL ;
-: LOOP> LOOPSP <-CELL LOOPSP @ @ ; 
-: DO IMMEDIATE ' >LOOP , ' >LOOP , [COMPILE] BEGIN ;
-: LOOPCHECK LOOP> LOOP> 1+  2DUP =  -ROT >LOOP >LOOP ;
-: +LOOPCHECK LOOP> LOOP> ROT + 2DUP <=  -ROT >LOOP >LOOP ;
-: LOOPFINISH LOOP> DROP LOOP> DROP ;
-: LOOP IMMEDIATE ' LOOPCHECK , [COMPILE] UNTIL ' LOOPFINISH , ;
-: +LOOP IMMEDIATE ' +LOOPCHECK , [COMPILE] UNTIL ' LOOPFINISH , ;
-: I LOOPTOP @  ;
-: J LOOPTOP 8 + @  ;
+
 
 
 : LOOPTEST 5 0 DO I . LOOP ;
@@ -764,6 +788,7 @@ VARIABLE DIVN
 \ WELCOME
 CLEAR_TIB
 \ Everything after this line will not be seen!
+
 QUOTE LINE_KEY INPUT-STREAM !
 
 
