@@ -550,11 +550,6 @@ defcode "UARTKEY",7,,UARTKEY
         NEXT
                        
         
-@ UARTEMIT ( -- c ) Read an unbuffered character from the UART
-defcode "UARTEMIT",8,,UARTEMIT
-        POPDSP r0
-        bl putchar        
-        NEXT        
 
         
 @ WORD ( -- addr length ) reads next word from stdin
@@ -733,7 +728,7 @@ defcode "SOURCE",6,,SOURCE
         NEXT
                 
 defword "EMIT",4,,EMIT
-        .int UARTEMIT
+        .int EXIT
         .int EXIT
         
 defword "KEY",3,,KEY
@@ -870,10 +865,7 @@ defcode "INTERPRET",9,,INTERPRET
         bx r1                           @  FIP address in r0, since _DOCOL
                                         @  assumes it)
 6:  @ Parse error        
-        ldr r0, =parse_error        
-        bl uart_puts
-        ldr r0, =word_buffer        
-        bl uart_puts
+
         NEXT
         
 .section .rodata

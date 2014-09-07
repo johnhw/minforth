@@ -18,7 +18,7 @@ jonesforth.o: jonesforth.s
 
 kernel.img: loadmap $(KOBJS)
 	objcopy -I binary -O elf32-littlearm -B arm --rename-section .data=.rodata,alloc,load,readonly,data,contents jonesforth.f jonesforthf.o
-	$(LD) $(KOBJS) jonesforthf.o -T loadmap -o minforth.elf -Map minforth.map
+	$(LD) $(KOBJS) jonesforthf.o  -T loadmap -o minforth.elf -Map minforth.map
 	objdump -D minforth.elf > minforth.list
 	objcopy minforth.elf -O ihex minforth.hex
 	objcopy --only-keep-debug minforth.elf kernel.sym

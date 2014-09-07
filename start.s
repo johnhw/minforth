@@ -138,15 +138,6 @@
         bic r0,r0,#0x80
         msr cpsr_c,r0
         
-        ldr r0, =boot_string
-        bl uart_puts        
-    wait_enter:
-        @ print the welcome, and wait for enter before continuing
-        bl _getchar              
-        cmp r0, #10
-        bne wait_enter
-        ldr r0, =welcome_string
-        bl uart_puts
         
         ldr r0, =0x8000     @ load the start address
         b jonesforth
@@ -189,33 +180,6 @@
    
 @@ UART reading and writing functions   
    
-@ Write one character to the UART    
-    .globl uart_putc
-    uart_putc:
-        ldr r1, =AUX_MU_LSR_REG
-    uart_wait:
-        ldr r2, [r1]
-        ands r2, #0x20    
-        beq uart_wait
-        ldr r1, =AUX_MU_IO_REG
-        str r0, [r1]
-        bx lr
-
-@ write a zero-teriminated string to the UART
-    .globl uart_puts
-    uart_puts:
-        mov r1, r0
-    puts_loop:    
-        ldrb r0, [r1]
-        add r1, #1       
-        cmp r0, #0 
-        beq puts_exit
-        push {r1,lr}    
-        bl uart_putc
-        pop {r1,lr}    
-        b puts_loop
-    puts_exit:
-        bx lr
         
 @ read a single character from the UART buffer
         .globl uart_getc    
@@ -248,22 +212,7 @@
         ldrne r0, =-1
         bx lr
         
-@ Write on character to the UART, translating newlines    
-    .global putchar
-    putchar:
-        push {lr}        
-        cmp r0, #10    
-        bne regularchar
-        ldr r0, =13             @ if '\n' write '\r\n'
-        bl uart_putc
-        ldr r0, =10
-        bl uart_putc
-        b putchar_exit
-    regularchar:
-        bl uart_putc
-    putchar_exit:
-        pop {lr}
-        bx lr
+
 
 @ Get one character, no echo
     .global _getchar
