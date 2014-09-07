@@ -228,13 +228,15 @@ var_\name :
         defconst "DOCOL",5,,DOCOL,_DOCOL
 @  PAD             Pointer to scratch-pad buffer.
         defconst "PAD",3,,PAD,scratch_pad
+@  MEMTOP          Pointer to the start of the heap
+        defconst "MEMTOP",6,,MEMTOP,scratch_pad_top
 @  F_IMMED         The IMMEDIATE flag's actual value.
         defconst "F_IMMED",7,,F_IMMED,F_IMM
 @  F_HIDDEN        The HIDDEN flag's actual value.
         defconst "F_HIDDEN",8,,F_HIDDEN,F_HID
 @  F_LENMASK       The length mask in the flags/len byte.
         defconst "F_LENMASK",9,,F_LENMASK,F_LEN
-        
+@ 1 itself (since we can't parse numbers yet!)        
         defconst "1",1,,ONE,1
         
 
@@ -347,6 +349,32 @@ defcode "XOR",3,,XOR
         PUSHDSP r0
         NEXT
 
+        
+@ CMOVE ( source dest length -- ) copy length bytes from source to dest
+defcode "CMOVE",5,,CMOVE
+        POP3 DSP                @ ( ), r2 = source, r1 = dest, r0 = length
+        cmp r2, r1              @ account for potential overlap
+        bge 2f                  @ copy forward if s >= d, backward otherwise
+        sub r3, r0, #1          @ (length - 1)
+        add r2, r3              @ end of source
+        add r1, r3              @ end of dest
+1:
+        cmp r0, #0              @ while length > 0
+        ble 3f
+        ldrb r3, [r2], #-1      @    read character from source
+        strb r3, [r1], #-1      @    and write it to dest (decrement both pointers)
+        sub r0, r0, #1          @    decrement length
+        b 1b
+2:
+        cmp r0, #0              @ while length > 0
+        ble 3f
+        ldrb r3, [r2], #1       @    read character from source
+        strb r3, [r1], #1       @    and write it to dest (increment both pointers)
+        sub r0, r0, #1          @    decrement length
+        b 2b
+3:
+        NEXT
+        
 
 @ LIT is used to compile literals in FORTH word.
 @ When LIT is executed it pushes the literal (which is the next codeword)
@@ -458,21 +486,17 @@ block_loop:
         cmp r1, #3          @ loop if not finished
         bgt block_loop
             
-    @ -r1 is left over characters    
+    @ r1 is left over characters    
     cmp r1, #0
     beq finalise            @ can finalise if len%4==0    
     ldr r2, [r0]        
-    
     cmp r1, #3    
     andeq r2, #0x00ffffff   @ hash the tail
-    
     cmp r1, #2
     ldr r3, =0x0000ffff
-    andeq r2, r3
-    
+    andeq r2, r3    
     cmp r1, #1
     andeq r2, #0x000000ff               
-    
     mul r2, r6      @ *= c1
     mov r2, r2, ROR #32-15     @ rotl(k, 15)
     mul r2, r7      @ *=c2
@@ -490,20 +514,28 @@ finalise:
     eor r5, r5, LSR #16    
     mov r0, r5              @ return hash
     bx lr   
-        
-.data
-    .align 2
-    .global srcptr
-    srcptr: .int _binary_jonesforth_f_start
-    
-    @ read one character from the pre-loaded source bl
+
+
+@ hash a 32 bit integer
+defcode "HASHINT",7,,HASHINT
+        ldr r1, =4
+        POPDSP r5
+        bl finalise
+        PUSHDSP r0
+        NEXT
+
+@ read one character from the pre-loaded source 
 srcchar:
     ldr r1, =srcptr
     ldr r2, [r1]
     ldrb r0, [r2]
     add r2, #1
     str r2, [r1]
-    bx lr
+    bx lr        
+.data
+    .align 2
+    .global srcptr
+    srcptr: .int _binary_jonesforth_f_start
         
 @ MEMKEY ( -- c ) Read the next character from the built in source buffer
 defcode "MEMKEY",6,,MEMKEY
@@ -645,32 +677,23 @@ defcode "CREATE",6,,CREATE
 
         ldr r4,=var_LATEST
         ldr r5,[r4]     @ load into r5 the link pointer
-
         str r5,[r3]     @ store link here -> last
-
         add r3,r3,#4    @ skip link adress
         strb r1,[r3]    @ store the length of the word
         add r3,r3,#1    @ skip the length adress
-
         mov r7,#0       @ initialize the incrementation
 
 1:
         cmp r7,r1       @ if the word is completley read
         beq 2f
-
         ldrb r6,[r0,r7] @ read and store a character
         strb r6,[r3,r7]
-
         add r7,r7,#1    @ ready to read the next character
-
         b 1b
-
 2:
         add r3,r3,r7            @ skip the word
-
         add r3,r3,#3            @ align to next 4 byte boundary
         and r3,r3,#~3
-
         str r8,[r4]             @ update LATEST and HERE
         str r3,[r2]
         NEXT
@@ -689,14 +712,14 @@ _COMMA:
         bx      lr
 
 @ [ ( -- ) Change interpreter state to Immediate mode
-defcode "[",1,F_IMM,LBRAC
+defcode "[[",2,F_IMM,LBRAC
         ldr     r0, =var_STATE
         mov     r1, #0                  @ FALSE
         str     r1, [r0]
         NEXT
 
 @ ] ( -- ) Change interpreter state to Compilation mode
-defcode "]",1,,RBRAC
+defcode "]]",2,,RBRAC
         ldr     r0, =var_STATE
         mvn     r1, #0                  @ TRUE
         str     r1, [r0]
@@ -722,7 +745,7 @@ defword "WORD",4,,WORD
         .int EXIT
                 
 @ : word ( -- ) Define a new FORTH word
-@ : : WORD CREATE DOCOL , LATEST @ HIDDEN ] ;
+@ : : WORD CREATE DOCOL , ] ;
 defword ":",1,,COLON
         .int WORD                       @ Get the name of the new word
         .int CREATE                     @ CREATE the dictionary entry / header
@@ -730,7 +753,7 @@ defword ":",1,,COLON
         .int RBRAC                      @ Go into compile mode.
         .int EXIT                       @ Return from the function.
 
-@ : ; IMMEDIATE LIT EXIT , LATEST @ HIDDEN [ ;
+@ : ; IMMEDIATE LIT EXIT , [ ;
 defword ";",1,F_IMM,SEMICOLON
         .int LIT, EXIT, COMMA           @ Append EXIT (so the word will return).
         .int LBRAC                      @ Go back to IMMEDIATE mode.
@@ -817,8 +840,6 @@ defword "QUIT", 4,, QUIT
 @ since we are the top level routine!
 defcode "INTERPRET",9,,INTERPRET
 7:  
-        mov r8, #0                      @ interpret_is_lit = 0
-
         bl _WORD                        @ read a word from stdin
         mov r4, r0                      @ store it in r4,r5
         mov r5, r1
@@ -874,10 +895,20 @@ return_stack:
         .space RETURN_STACK_SIZE
 return_stack_top:
 
-@ Reserve space for new words and data structures (16Kb)
+@ Reserve space for the return stack (1Kb)
         .bss
         .align 5                @ align to cache-line size
-        .set DATA_SEGMENT_SIZE, 0x8000000
+        .set STRING_TABLE_SIZE, 0x8000
+        .set STRING_TABLE_MASK, 0x7fff
+string_table:
+        .space STRING_TABLE_SIZE
+string_table_end:
+
+
+@ Reserve space for new words and data structures (16Mb)
+        .bss
+        .align 5                @ align to cache-line size
+        .set DATA_SEGMENT_SIZE, 0x1000000
 data_segment:
         .space DATA_SEGMENT_SIZE
 data_segment_top:
