@@ -184,6 +184,30 @@ code_\label :                   @ assembler code follows
 defcode "EXIT",4,,EXIT
         POPRSP FIP
         NEXT
+        
+defcode "DEBUG",5,,DEBUG
+    mov r0, RSP
+    ldr r1, =dbg_RSP
+    str r0, [r1]
+    
+    mov r0, DSP
+    ldr r1, =dbg_DSP
+    str r0, [r1]
+    
+    mov r0, FIP
+    ldr r1, =dbg_FIP
+    str r0, [r1]
+    
+    ldr DSP, =dbg_stack_top
+    ldr RSP, =dbg_rstack_top
+    ldr FIP, =DEBUGHOOK
+    NEXT
+
+defword "DEBUGHOOK",9,,DEBUGHOOK
+    .int MEMKEY
+    .int EXIT
+    
+    
 
 
 @ defvar macro helps defining FORTH variables in assembly
@@ -375,6 +399,16 @@ defcode "CMOVE",5,,CMOVE
 3:
         NEXT
         
+@ FILL ( dest length byte -- )
+defcode "FILL",4,,FILL
+    POP3 DSP            @ r2 = dest, r1=len, r0=byte
+_fill:    
+    strb r0, [r2]
+    add r2, #1
+    subs r1, #1    
+    bgt _fill
+    NEXT
+               
 
 @ LIT is used to compile literals in FORTH word.
 @ When LIT is executed it pushes the literal (which is the next codeword)
@@ -543,14 +577,6 @@ defcode "MEMKEY",6,,MEMKEY
         PUSHDSP r0        
         NEXT        
             
-@ UARTKEY ( -- c ) Read an unbuffered character from the UART
-defcode "UARTKEY",7,,UARTKEY
-        bl _getchar
-        PUSHDSP r0        
-        NEXT
-                       
-        
-
         
 @ WORD ( -- addr length ) reads next word from stdin
 @ skips spaces, control-characters and comments, limited to 32 characters
@@ -878,6 +904,22 @@ defcode "EXECUTE",7,,EXECUTE
         POPDSP r0
         ldr r1, [r0]
         bx r1
+
+@ Store the old stack and instruction pointers when we switch into the debugger
+dbg_RSP:
+    .int 0
+dbg_DSP:
+    .int 0
+dbg_FIP:
+    .int 0
+
+@ stack space for the debugger
+.bss
+.align 5                @ align to cache-line size    
+        .space 0x400
+dbg_stack_top:    
+        .space 0x400
+dbg_rstack_top:    
         
 @ Reserve space for the return stack (1Kb)
         .bss
