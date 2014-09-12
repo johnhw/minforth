@@ -33,7 +33,10 @@
 @
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-        .set JONES_VERSION,48
+.set JONES_VERSION,48
+
+
+
 
 @ Reserve three special registers:
 @ DSP (r13) points to the top of the data stack
@@ -90,7 +93,25 @@ FIP     .req    r10
 @ jonesforth is the entry point for the FORTH environment
         .text
         .align 2                        @ alignment 2^n (2^2 = 4 byte alignment)
-        .global jonesforth
+        .global _start
+    
+reset:    
+        @ relocation code
+        sub	r1, pc, #8	@ Where are we?
+        mov	sp, r1		@ Bootstrap stack immediately before _start        
+        ldr	r0, =0x8000	@ Absolute address of kernel memory
+        cmp	r0, r1		@ Are we loaded where we expect to be?
+        beq	no_relocate		@ Then, jump to kernel entry-point
+        mov	lr, r0		@ Otherwise, relocate ourselves
+        ldr	r2, =0x7F00	@ Copy (32k - 256) bytes
+    1:	ldmia	r1!, {r3-r10}	@ Read 8 words
+        stmia	r0!, {r3-r10}	@ Write 8 words
+        subs	r2, #32		@ Decrement len
+        bgt	1b		@ More to copy?
+        bx lr       @ Return to our relocated selves!
+no_relocate:        
+        ldr r0, =0x8000     @ load the start address
+
 jonesforth:
         ldr r0, =var_S0
         str DSP, [r0]                   @ Save the original stack position in S0
@@ -185,29 +206,6 @@ defcode "EXIT",4,,EXIT
         POPRSP FIP
         NEXT
         
-defcode "DEBUG",5,,DEBUG
-    mov r0, RSP
-    ldr r1, =dbg_RSP
-    str r0, [r1]
-    
-    mov r0, DSP
-    ldr r1, =dbg_DSP
-    str r0, [r1]
-    
-    mov r0, FIP
-    ldr r1, =dbg_FIP
-    str r0, [r1]
-    
-    ldr DSP, =dbg_stack_top
-    ldr RSP, =dbg_rstack_top
-    ldr FIP, =DEBUGHOOK
-    NEXT
-
-defword "DEBUGHOOK",9,,DEBUGHOOK
-    .int MEMKEY
-    .int EXIT
-    
-    
 
 
 @ defvar macro helps defining FORTH variables in assembly
@@ -851,8 +849,6 @@ _DIVMOD:                        @ Integer Divide/Modulus
 
 @ QUIT ( -- ) the first word to be executed
 defword "QUIT", 4,, QUIT
-        .int R0, RSPSTORE               @ Clear return stack
-        .int S0, FETCH, DSPSTORE        @ Clear data stack
         .int INTERPRET                  @ Interpret a word                
         .int BRANCH,-8                  @ LOOP FOREVER
 
@@ -891,12 +887,9 @@ defcode "INTERPRET",9,,INTERPRET
         bx r1                           @  FIP address in r0, since _DOCOL
                                         @  assumes it)
 6:  @ Parse error        
-
+    @ just ignore it; must *NEVER* happen before we've established the new interpreter
         NEXT
         
-.section .rodata
-    parse_error:
-    .ascii "Unknown word!\0"
         
 @ EXECUTE ( xt -- ) jump to the address on the stack
 @-- WARNING! THIS MUST BE THE LAST WORD DEFINED IN ASSEMBLY (see LATEST) --@
@@ -904,22 +897,6 @@ defcode "EXECUTE",7,,EXECUTE
         POPDSP r0
         ldr r1, [r0]
         bx r1
-
-@ Store the old stack and instruction pointers when we switch into the debugger
-dbg_RSP:
-    .int 0
-dbg_DSP:
-    .int 0
-dbg_FIP:
-    .int 0
-
-@ stack space for the debugger
-.bss
-.align 5                @ align to cache-line size    
-        .space 0x400
-dbg_stack_top:    
-        .space 0x400
-dbg_rstack_top:    
         
 @ Reserve space for the return stack (1Kb)
         .bss

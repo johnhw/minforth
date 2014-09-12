@@ -91,6 +91,8 @@ CHAR : LATEST @ @ 4+ 1+ C!
 : '.' [[ CHAR . ]] LITERAL ;
 
 : ( IMMEDIATE 1 BEGIN KEY DUP '(' = IF DROP 1+ ELSE ')' = IF 1- THEN THEN DUP 0= UNTIL DROP ;
+( comments are now available! )
+
 
 ( parse numbers )
 0 VARIABLE TNUM
@@ -153,11 +155,9 @@ CHAR : LATEST @ @ 4+ 1+ C!
         THEN ;
 
 : QUIT BEGIN R0 RSP! ?STACK WORD INTERPRET AGAIN ;
+: BREAK DROPALL ." <BREAK>" CR QUIT ;
 
 QUIT
-: BREAK R0 RSP! S0 @ DSP! ." <BREAK>" CR QUIT ;
-
-
 ( now we are running in our own interpreter )
 ( and we have numbers as literals! )
 
@@ -165,14 +165,6 @@ QUIT
 : '\n' 10 ;
 : \ IMMEDIATE BEGIN KEY '\n' = UNTIL ;
 
-\ Base switching 
-: # ( b -- n ) BASE @ SWAP BASE ! WORD NUMBER DROP SWAP BASE ! ;
-: 16# 16 # ;
-: 10# 10 # ;
-: 2# 2 # ;
-: 8# 8 # ;
-: BINARY ( -- ) 2 BASE ! ;
-: OCTAL ( -- ) 8 BASE ! ;
 : HEX 16 BASE ! ;
 : DECIMAL 10 BASE ! ;
 
@@ -185,8 +177,10 @@ QUIT
 : SETBITS BITRANGE SETMASK ;
 : SETBIT NTHBIT OR ;
 : CLEARBIT NTHBIT INVERT AND ;
-16# FF CONSTANT 8BITMASK
-16# FFFF CONSTANT 16BITMASK
+HEX
+FF CONSTANT 8BITMASK
+FFFF CONSTANT 16BITMASK
+DECIMAL 
 : HIGH16 16 RSHIFT ;
 : LOW16 16BITMASK AND ;
 : LSB 8BITMASK AND ;
@@ -257,7 +251,6 @@ DECIMAL
 : UARTKEY UARTRAWKEY DUP 3 = IF BREAK THEN DUP 13 = IF DROP 10 THEN ;
 UARTINIT
 
-
 : ." IMMEDIATE ( -- )
 	STATE @ IF
 		[COMPILE] S" ' TELL ,
@@ -265,8 +258,6 @@ UARTINIT
 		BEGIN KEY DUP '"' = IF DROP EXIT THEN EMIT AGAIN
 	THEN
 ;
-
-
 
 \ Memory words
 : C++ DUP C@ 1+ SWAP C! ;
@@ -318,6 +309,15 @@ UARTINIT
 : .INTEGER 16 RSHIFT DOT TELL  ;
 : .FRACTIONAL 16BITMASK AND BEGIN 10 * DUP 16 RSHIFT '0' + EMIT 16BITMASK AND DUP 0= UNTIL ;
 : .X DUP .INTEGER '.' EMIT .FRACTIONAL ;
+
+\ Base switching words
+: # ( b -- n ) BASE @ SWAP BASE ! WORD NUMBER DROP SWAP BASE ! ;
+: 16# 16 # ;
+: 10# 10 # ;
+: 2# 2 # ;
+: 8# 8 # ;
+: BINARY ( -- ) 2 BASE ! ;
+: OCTAL ( -- ) 8 BASE ! ;
 
 \ standard words
 : ON TRUE SWAP ! ;

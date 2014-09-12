@@ -6,12 +6,10 @@ AS=	as
 CC=	gcc -Wall -O2 -nostdlib -nostartfiles -ffreestanding -Os
 LD=	ld
 
-KOBJS=	start.o jonesforth.o 
+KOBJS=	jonesforth.o 
 
 all: kernel.img
 
-start.o: start.s
-	$(AS) start.s -o start.o
 
 jonesforth.o: jonesforth.s
 	$(AS) jonesforth.s -o jonesforth.o
