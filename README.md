@@ -26,20 +26,16 @@ script hex.scr recompiles, and then uses the bootloader to upload the new kernel
 ANSI color, as minFORTH use ANSI codes to display colored text, clear the screen etc.
 
 ## Running
-If you connect via the UART and boot the board, you should see:
 
-    <PRESS ENTER>
-    
-press enter and you will see:
-                           ____    _____   ____    ______  __  __
-                __        /\  _`\ /\  __`\/\  _`\ /\__  _\/\ \/\ \
-       ___ ___ /\_\    ___\ \ \L\_\ \ \/\ \ \ \L\ \/_/\ \/\ \ \_\ \
-     /' __` __`\/\ \ /' _ `\ \  _\/\ \ \ \ \ \ ,  /  \ \ \ \ \  _  \
-     /\ \/\ \/\ \ \ \/\ \/\ \ \ \/  \ \ \_\ \ \ \\ \  \ \ \ \ \ \ \ \
-     \ \_\ \_\ \_\ \_\ \_\ \_\ \_\   \ \_____\ \_\ \_\ \ \_\ \ \_\ \_\
-      \/_/\/_/\/_/\/_/\/_/\/_/\/_/    \/_____/\/_/\/ /  \/_/  \/_/\/_/
-
-  
+                               ____    _____   ____    ______  __  __
+                    __        /\  _`\ /\  __`\/\  _`\ /\__  _\/\ \/\ \
+           ___ ___ /\_\    ___\ \ \L\_\ \ \/\ \ \ \L\ \/_/\ \/\ \ \_\ \
+         /' __` __`\/\ \ /' _ `\ \  _\/\ \ \ \ \ \ ,  /  \ \ \ \ \  _  \
+         /\ \/\ \/\ \ \ \/\ \/\ \ \ \/  \ \ \_\ \ \ \\ \  \ \ \ \ \ \ \ \
+         \ \_\ \_\ \_\ \_\ \_\ \_\ \_\   \ \_____\ \_\ \_\ \ \_\ \ \_\ \_\
+          \/_/\/_/\/_/\/_/\/_/\/_/\/_/    \/_____/\/_/\/ /  \/_/  \/_/\/_/
+        0x4183976 CELLS FREE
+        HERE:0x21E80 LATEST:0x21E1C   R0:0xFD20 RSP:0xFD14   DSP:0x7CF4 S0:0x8000
 
 
 Original pijFORTHos documentation:

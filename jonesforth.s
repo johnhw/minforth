@@ -35,9 +35,6 @@
 
 .set JONES_VERSION,48
 
-
-
-
 @ Reserve three special registers:
 @ DSP (r13) points to the top of the data stack
 @ RSP (r11) points to the top of the return stack
@@ -301,7 +298,6 @@ defcode "-",1,,SUB
         PUSHDSP r0
         NEXT
 
-
 @ LSHIFT ( a b -- a<<b )
 defcode "LSHIFT",6,,LSHIFT
         POP2 DSP                @ ( ), r1 = a, r0 = b
@@ -556,8 +552,14 @@ defcode "HASHINT",7,,HASHINT
         PUSHDSP r0
         NEXT
 
+        
+@ MEMKEY ( -- c ) Read the next character from the built in source buffer
+defcode "MEMKEY",6,,MEMKEY
+        bl srcchar
+        PUSHDSP r0        
+        NEXT        
 @ read one character from the pre-loaded source 
-srcchar:
+_MEMKEY:
     ldr r1, =srcptr
     ldr r2, [r1]
     ldrb r0, [r2]
@@ -568,12 +570,6 @@ srcchar:
     .align 2
     .global srcptr
     srcptr: .int _binary_jonesforth_f_start
-        
-@ MEMKEY ( -- c ) Read the next character from the built in source buffer
-defcode "MEMKEY",6,,MEMKEY
-        bl srcchar
-        PUSHDSP r0        
-        NEXT        
             
         
 @ WORD ( -- addr length ) reads next word from stdin
@@ -586,14 +582,14 @@ defcode "MEMWORD",7,,MEMWORD
 _WORD:
         stmfd   sp!, {r6,lr}     @ preserve r6 and lr
 1:
-        bl srcchar                  @ read a character        
+        bl _MEMKEY                  @ read a character        
         cmp r0, #' '
         ble 1b                   @ skip blank character
 
         ldr     r6, =word_buffer
 2:
         strb r0, [r6], #1        @ store character in word buffer
-        bl srcchar               @ read more characters until a space is found
+        bl _MEMKEY               @ read more characters until a space is found
         cmp r0, #' '
         bgt 2b
 
