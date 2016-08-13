@@ -33,7 +33,6 @@
 @
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-.set JONES_VERSION,48
 
 @ Reserve three special registers:
 @ DSP (r13) points to the top of the data stack
@@ -50,7 +49,7 @@ FIP     .req    r10
         .macro PUSHRSP reg
         str     \reg, [RSP, #-4]!
         .endm
-
+        
         .macro POPRSP reg
         ldr     \reg, [RSP], #4
         .endm
@@ -69,16 +68,14 @@ FIP     .req    r10
 
         .macro POP2 reg
         ldmia   \reg!, {r0-r1}          @ ( r1 r0 -- )
-        .endm
+        .endm        
 
-        .macro PUSH3 reg
-        stmdb   \reg!, {r0-r2}          @ ( -- r2 r1 r0 )
+@ align a register to a 4 byte boundary        
+.macro ALGN reg
+        add     \reg, #3
+        and     \reg, #~3
         .endm
-
-        .macro POP3 reg
-        ldmia   \reg!, {r0-r2}          @ ( r2 r1 r0 -- )
-        .endm
-
+        
 
 @ _NEXT is the assembly subroutine that is called
 @ at the end of every FORTH word execution.
@@ -94,20 +91,20 @@ FIP     .req    r10
     
 reset:    
         @ relocation code
-        sub	r1, pc, #8	@ Where are we?
-        mov	sp, r1		@ Bootstrap stack immediately before _start        
-        ldr	r0, =0x8000	@ Absolute address of kernel memory
-        cmp	r0, r1		@ Are we loaded where we expect to be?
-        beq	no_relocate		@ Then, jump to kernel entry-point
-        mov	lr, r0		@ Otherwise, relocate ourselves
-        ldr	r2, =0x7F00	@ Copy (32k - 256) bytes
+        sub	r1, pc, #8	        @ Where are we?
+        mov	sp, r1		        @ Bootstrap stack immediately before _start        
+        ldr	r0, =0x8000	        @ Absolute address of kernel memory
+        cmp	r0, r1		        @ Are we loaded where we expect to be?
+        beq	no_relocate		    @ Then, jump to kernel entry-point
+        mov	lr, r0		        @ Otherwise, relocate ourselves
+        ldr	r2, =0x7F00	        @ Copy (32k - 256) bytes
     1:	ldmia	r1!, {r3-r10}	@ Read 8 words
         stmia	r0!, {r3-r10}	@ Write 8 words
-        subs	r2, #32		@ Decrement len
-        bgt	1b		@ More to copy?
-        bx lr       @ Return to our relocated selves!
+        subs	r2, #32		    @ Decrement len
+        bgt	1b		            @ More to copy?
+        bx lr                   @ Return to our relocated selves!
 no_relocate:        
-        ldr r0, =0x8000     @ load the start address
+        ldr r0, =0x8000         @ load the start address
 
 jonesforth:
         ldr r0, =var_S0
@@ -196,14 +193,19 @@ name_\label :
 code_\label :                   @ assembler code follows
         .endm
 
+@ simplify definitions of 2-operand operators
+@ operands will appear in r0 and r1
+@ ( ), r1 = a, r0 = b
+.macro defop name, namelen, flags=0, label
+        defcode \name,\namelen,\flags,\label
+        POP2DSP
+
 @ EXIT is the last codeword of a FORTH word.
 @ It restores the FIP and returns to the caller using NEXT.
 @ (See _DOCOL)
 defcode "EXIT",4,,EXIT
         POPRSP FIP
         NEXT
-        
-
 
 @ defvar macro helps defining FORTH variables in assembly
         .macro defvar name, namelen, flags=0, label, initial=0
@@ -218,6 +220,12 @@ var_\name :
         .int \initial
         .endm
 
+@ push the given register onto the stack and call NEXT
+.macro PUSHNEXT, r
+    PUSHDSP \r
+    NEXT
+.endm        
+
 @ The built-in variables are:
 @  STATE           Is the interpreter executing code (0) or compiling a word (non-zero)?
         defvar "STATE",5,,STATE
@@ -227,8 +235,6 @@ var_\name :
         defvar "LATEST",6,,LATEST,name_EXECUTE  @ The last word defined in assembly is EXECUTE
 @  S0              Stores the address of the top of the parameter stack.
         defvar "S0",2,,S0
-@  BASE            The current base for printing and reading numbers.
-        defvar "BASE",4,,BASE,10
 
 @ defconst macro helps defining FORTH constants in assembly
         .macro defconst name, namelen, flags=0, label, value
@@ -239,16 +245,10 @@ var_\name :
         .endm
 
 @ The built-in constants are:
-@  VERSION         Is the current version of this FORTH.
-        defconst "VERSION",7,,VERSION,JONES_VERSION
 @  R0              The address of the top of the return stack.
         defconst "R0",2,,R0,return_stack_top
 @  DOCOL           Pointer to _DOCOL.
         defconst "DOCOL",5,,DOCOL,_DOCOL
-@  PAD             Pointer to scratch-pad buffer.
-        defconst "PAD",3,,PAD,scratch_pad
-@  MEMTOP          Pointer to the start of the heap
-        defconst "MEMTOP",6,,MEMTOP,scratch_pad_top
 @  F_IMMED         The IMMEDIATE flag's actual value.
         defconst "F_IMMED",7,,F_IMMED,F_IMM
 @  F_HIDDEN        The HIDDEN flag's actual value.
@@ -256,165 +256,72 @@ var_\name :
 @  F_LENMASK       The length mask in the flags/len byte.
         defconst "F_LENMASK",9,,F_LENMASK,F_LEN
 @ 1 itself (since we can't parse numbers yet!)        
-        defconst "1",1,,ONE,1
-        
-
-@ SWAP ( a b -- b a ) swaps the two top elements
-defcode "SWAP",4,,SWAP
-        POP2 DSP                @ ( ), r1 = a, r0 = b
-        PUSHDSP r0              @ ( b ), r1 = a, r0 = b
-        PUSHDSP r1              @ ( b a ), r1 = a, r0 = b
-        NEXT
-
-
-@ ROT ( a b c -- b c a ) rotation
-defcode "ROT",3,,ROT
-        POPDSP r1               @ ( a b ), r1 = c
-        POPDSP r2               @ ( a ), r2 = b
-        POPDSP r0               @ ( ), r0 = a
-        PUSH3 DSP               @ ( b c a ), r2 = b, r1 = c, r0 = a
-        NEXT
-
-@ -ROT ( a b c -- c a b ) backwards rotation
-defcode "-ROT",4,,NROT
-        POP3 DSP                @ ( ), r2 = a, r1 = b, r0 = c
-        PUSHDSP r0              @ ( c )
-        PUSHDSP r2              @ ( c a )
-        PUSHDSP r1              @ ( c a b )
-        NEXT
-
+        defconst "1",1,,ONE,1        
 
 @ + ( a b -- a+b )
-defcode "+",1,,ADD
-        POP2 DSP                @ ( ), r1 = a, r0 = b
+defop "+",1,,ADD        
         add r0, r0, r1
-        PUSHDSP r0
-        NEXT
-
+        PUSHNEXT r0
+        
 @ - ( a b -- a-b )
-defcode "-",1,,SUB
-        POP2 DSP                @ ( ), r1 = a, r0 = b
+defcode "-",1,,SUB        
         sub r0, r1, r0
-        PUSHDSP r0
-        NEXT
-
+        PUSHNEXT r0
+        
 @ LSHIFT ( a b -- a<<b )
-defcode "LSHIFT",6,,LSHIFT
-        POP2 DSP                @ ( ), r1 = a, r0 = b
+defop "LSHIFT",6,,LSHIFT
         mov r0, r1, LSL r0
-        PUSHDSP r0
-        NEXT
-
+        PUSHNEXT r0
+        
 @ RSHIFT ( a b -- a>>b )
-defcode "RSHIFT",6,,RSHIFT
-        POP2 DSP                @ ( ), r1 = a, r0 = b
+defop "RSHIFT",6,,RSHIFT
         mov r0, r1, LSR r0
-        PUSHDSP r0
-        NEXT
-
+        PUSHNEXT r0
+        
 @ * ( a b -- a*b )
-defcode "*",1,,MUL
-        POP2 DSP                @ ( ), r1 = a, r0 = b
+defop "*",1,,MUL
         mul r2, r1, r0
-        PUSHDSP r2
-        NEXT
-
+        PUSHNEXT r2
+        
 @ = ( a b -- p ) where p is 1 when a and b are equal (0 otherwise)
-defcode "=",1,,EQ
-        POP2 DSP                @ ( ), r1 = a, r0 = b
+defop "=",1,,EQ
         cmp r1, r0
         mvneq r0, #0
         movne r0, #0
-        PUSHDSP r0
-        NEXT
-
+        PUSHNEXT r0
+        
 @ < ( a b -- p ) where p = a < b
-defcode "<",1,,LT
-        POP2 DSP                @ ( ), r1 = a, r0 = b
+defop "<",1,,LT
         cmp r1, r0
         mvnlt r0, #0
         movge r0, #0
-        PUSHDSP r0
-        NEXT
+        PUSHNEXT r0
         
 @ > ( a b -- p ) where p = a < b
-defcode ">",1,,GT
-        POP2 DSP                @ ( ), r1 = a, r0 = b
+defop ">",1,,GT
         cmp r1, r0
         mvngt r0, #0
         movle r0, #0
-        PUSHDSP r0
-        NEXT
-
+        PUSHNEXT r0
+        
 @ AND ( a b -- a&b ) bitwise and
-defcode "AND",3,,AND
-        POP2 DSP                @ ( ), r1 = a, r0 = b
+defop "AND",3,,AND
         and r0, r1, r0
-        PUSHDSP r0
-        NEXT
-
+        PUSHNEXT r0
+        
 @ OR ( a b -- a|b ) bitwise or
-defcode "OR",2,,OR
-        POP2 DSP                @ ( ), r1 = a, r0 = b
+defop "OR",2,,OR
         orr r0, r1, r0
-        PUSHDSP r0
-        NEXT
-
+        PUSHNEXT r0
+        
 @ XOR ( a b -- a^b ) bitwise xor
-defcode "XOR",3,,XOR
-        POP2 DSP                @ ( ), r1 = a, r0 = b
+defop "XOR",3,,XOR
         eor r0, r1, r0
-        PUSHDSP r0
-        NEXT
+        PUSHNEXT r0                    
 
-        
-@ CMOVE ( source dest length -- ) copy length bytes from source to dest
-defcode "CMOVE",5,,CMOVE
-        POP3 DSP                @ ( ), r2 = source, r1 = dest, r0 = length
-        cmp r2, r1              @ account for potential overlap
-        bge 2f                  @ copy forward if s >= d, backward otherwise
-        sub r3, r0, #1          @ (length - 1)
-        add r2, r3              @ end of source
-        add r1, r3              @ end of dest
-1:
-        cmp r0, #0              @ while length > 0
-        ble 3f
-        ldrb r3, [r2], #-1      @    read character from source
-        strb r3, [r1], #-1      @    and write it to dest (decrement both pointers)
-        sub r0, r0, #1          @    decrement length
-        b 1b
-2:
-        cmp r0, #0              @ while length > 0
-        ble 3f
-        ldrb r3, [r2], #1       @    read character from source
-        strb r3, [r1], #1       @    and write it to dest (increment both pointers)
-        sub r0, r0, #1          @    decrement length
-        b 2b
-3:
-        NEXT
-        
-@ FILL ( dest length byte -- )
-defcode "FILL",4,,FILL
-    POP3 DSP            @ r2 = dest, r1=len, r0=byte
-_fill:    
-    strb r0, [r2]
-    add r2, #1
-    subs r1, #1    
-    bgt _fill
-    NEXT
-               
-
-@ LIT is used to compile literals in FORTH word.
-@ When LIT is executed it pushes the literal (which is the next codeword)
-@ into the stack and skips it (since the literal is not executable).
-defcode "LIT", 3,, LIT
-        ldr r1, [FIP], #4
-        PUSHDSP r1
-        NEXT
 
 @ ! ( value address -- ) write value at address
-defcode "!",1,,STORE
-        POP2 DSP                @ ( ), r1 = value, r0 = address
+defop "!",1,,STORE
         str r1, [r0]
         NEXT
 
@@ -422,13 +329,10 @@ defcode "!",1,,STORE
 defcode "@",1,,FETCH
         POPDSP r1
         ldr r0, [r1]
-        PUSHDSP r0
-        NEXT
-
+        PUSHNEXT r0        
 
 @ C! ( c addr -- ) write byte c at addr
-defcode "C!",2,,STOREBYTE
-        POP2 DSP                @ ( ), r1 = c, r0 = addr
+defop "C!",2,,STOREBYTE        
         strb r1, [r0]
         NEXT
 
@@ -436,10 +340,8 @@ defcode "C!",2,,STOREBYTE
 defcode "C@",2,,FETCHBYTE
         POPDSP r1
         ldrb r0, [r1]
-        PUSHDSP r0
-        NEXT
-
-
+        PUSHNEXT r0
+        
 @ >R ( a -- ) move the top element from the data stack to the return stack
 defcode ">R",2,,TOR
         POPDSP r0
@@ -449,23 +351,20 @@ defcode ">R",2,,TOR
 @ R> ( -- a ) move the top element from the return stack to the data stack
 defcode "R>",2,,FROMR
         POPRSP r0
-        PUSHDSP r0
-        NEXT
-
+        PUSHNEXT r0
+        
 @ RSP@, RSP!, DSP@, DSP! manipulate the return and data stack pointers
 
 defcode "RSP@",4,,RSPFETCH
-        PUSHDSP RSP
-        NEXT
-
+        PUSHNEXT RSP
+        
 defcode "RSP!",4,,RSPSTORE
         POPDSP RSP
         NEXT
 
 defcode "DSP@",4,,DSPFETCH
         mov r0, DSP
-        PUSHDSP r0
-        NEXT
+        PUSHNEXT r0        
 
 defcode "DSP!",4,,DSPSTORE
         POPDSP r0
@@ -474,84 +373,12 @@ defcode "DSP!",4,,DSPSTORE
         
 defcode "FIP@",4,,FIPFETCH
         mov r0, FIP
-        PUSHDSP r0
-        NEXT
-
+        PUSHNEXT r0
+        
 defcode "FIP!",4,,FIPSTORE
         POPDSP r0
         mov FIP, r0
         NEXT
-
-defcode "HASH",4,,HASH
-    POPDSP r1
-    POPDSP r0
-    bl murmur_hash
-    PUSHDSP r0
-    NEXT
-        
-@ Compute the murmur3 hash of a string.
-@ string in r0, len in r1, return in r0
-.globl murmur_hash    
-murmur_hash:
-    ldr r6, =0xcc9e2d51
-    ldr r7, =0x1b873593
-    ldr r8, =0xe6546b64
-    ldr r5, =0              @ hash    
-    push {r1}
-    
-block_loop:    
-        ldr r2, [r0]        @ k = blocks[i]        
-        add r0, #4
-        sub r1, #4
-        mul r2, r6          @ *= c1
-        mov r2, r2, ROR #32-15     @ rotl(k, 15)
-        mul r2, r7          @ *=c2
-        eor r5, r2          @ hash ^ = k
-        mov r5, r5, ROR #32-13     @ hash = rotl(hash, 13)
-        ldr r4, =5          @ hash = hash * m + n
-        mul r5, r4
-        add r5, r8        
-        cmp r1, #3          @ loop if not finished
-        bgt block_loop
-            
-    @ r1 is left over characters    
-    cmp r1, #0
-    beq finalise            @ can finalise if len%4==0    
-    ldr r2, [r0]        
-    cmp r1, #3    
-    andeq r2, #0x00ffffff   @ hash the tail
-    cmp r1, #2
-    ldr r3, =0x0000ffff
-    andeq r2, r3    
-    cmp r1, #1
-    andeq r2, #0x000000ff               
-    mul r2, r6      @ *= c1
-    mov r2, r2, ROR #32-15     @ rotl(k, 15)
-    mul r2, r7      @ *=c2
-    eor r5, r2      @ hash ^ = k
-    
-finalise:        
-    pop {r1}
-    eor r5, r1
-    eor r5, r5, LSR #16
-    ldr r0, =0x085ebca6b
-    mul r5, r0
-    eor r5, r5, LSR #13
-    ldr r0, =0xc2b2ae35
-    mul r5, r0
-    eor r5, r5, LSR #16    
-    mov r0, r5              @ return hash
-    bx lr   
-
-
-@ hash a 32 bit integer
-defcode "HASHINT",7,,HASHINT
-        ldr r1, =4
-        POPDSP r5
-        bl finalise
-        PUSHDSP r0
-        NEXT
-
         
 @ MEMKEY ( -- c ) Read the next character from the built in source buffer
 defcode "MEMKEY",6,,MEMKEY
@@ -560,12 +387,12 @@ defcode "MEMKEY",6,,MEMKEY
         NEXT        
 @ read one character from the pre-loaded source 
 _MEMKEY:
-    ldr r1, =srcptr
-    ldr r2, [r1]
-    ldrb r0, [r2]
-    add r2, #1
-    str r2, [r1]
-    bx lr        
+    ldr r1, =srcptr     @ r1 = srcptr
+    ldr r2, [r1]        @ r2 = *srcptr
+    ldrb r0, [r2]       @ r0 = **srcptr     
+    add r2, #1          @ *srcptr++
+    str r2, [r1]        @ [writeback]
+    bx lr               @ return
 .data
     .align 2
     .global srcptr
@@ -582,7 +409,7 @@ defcode "MEMWORD",7,,MEMWORD
 _WORD:
         stmfd   sp!, {r6,lr}     @ preserve r6 and lr
 1:
-        bl _MEMKEY                  @ read a character        
+        bl _MEMKEY               @ read a character        
         cmp r0, #' '
         ble 1b                   @ skip blank character
 
@@ -607,9 +434,6 @@ word_buffer:
         .int 0
 word_length:
         .space 1
-        
-        
-
 
 @ FIND ( addr length -- dictionary_address )
 @ Tries to find a word in the dictionary and returns its address.
@@ -618,8 +442,7 @@ defcode "FIND",4,,FIND
         POPDSP r1       @ length
         POPDSP r0       @ addr
         bl _FIND
-        PUSHDSP r0
-        NEXT
+        PUSHNEXT r0        
 
 _FIND:
         stmfd   sp!, {r5,r6,r8,r9}      @ save callee save registers
@@ -628,7 +451,6 @@ _FIND:
 1:
         cmp r3, #0                      @ did we check all the words ?
         beq 4f                          @ then exit
-
         ldrb r2, [r3, #4]               @ read the length field
         and r2, r2, #(F_HID|F_LEN)      @ keep only length + hidden bits
         cmp r2, r1                      @ do the lengths match ?
@@ -640,7 +462,6 @@ _FIND:
         mov r6, r3                      @ r6 contains dict string
         add r6, r6, #5                  @ (we skip link and length fields)
                                         @ r2 contains the length
-
 2:
         ldrb r8, [r5], #1               @ compare character per character
         ldrb r9, [r6], #1
@@ -648,7 +469,6 @@ _FIND:
         bne 3f                          @ if they do not match, branch to 3
         subs r2,r2,#1                   @ decrement length
         bne 2b                          @ loop
-
                                         @ here, strings are equal
         b 4f                            @ branch to 4
 
@@ -661,24 +481,19 @@ _FIND:
         bx lr
 
 @ >CFA ( dictionary_address -- executable_address )
-@ Transformat a dictionary address into a code field address
+@ Transform a dictionary address into a code field address
 defcode ">CFA",4,,TCFA
         POPDSP r0
         bl _TCFA
-        PUSHDSP r0
-        NEXT
-
+        PUSHNEXT r0
+        
 _TCFA:
         add r0,r0,#4            @ skip link field
         ldrb r1, [r0], #1       @ load and skip the length field
         and r1,r1,#F_LEN        @ keep only the length
         add r0,r0,r1            @ skip the name field
-        add r0,r0,#3            @ find the next 4-byte boundary
-        and r0,r0,#~3
+        ALGN r0
         bx lr
-
-@ >DFA ( dictionary_address -- data_field_address )
-@ Return the address of the first data field
 
 @ CREATE ( address length -- ) Creates a new dictionary entry
 @ in the data segment.
@@ -686,6 +501,7 @@ defcode "CREATE",6,,CREATE
         POPDSP r1       @ length of the word to insert into the dictionnary
         POPDSP r0       @ address of the word to insert into the dictionnary
 
+        stmfd   sp!, {r4, r5,r6,r7,r8}      @ save callee save registers
         ldr r2,=var_HERE
         ldr r3,[r2]     @ load into r3 and r8 the location of the header
         mov r8,r3
@@ -707,10 +523,10 @@ defcode "CREATE",6,,CREATE
         b 1b
 2:
         add r3,r3,r7            @ skip the word
-        add r3,r3,#3            @ align to next 4 byte boundary
-        and r3,r3,#~3
+        ALGN r3                 @ align to next 4 byte boundary
         str r8,[r4]             @ update LATEST and HERE
         str r3,[r2]
+        ldmfd   sp!, {r4, r5,r6,r7,r8}      @ restore callee save registers
         NEXT
 
         
@@ -744,12 +560,7 @@ defcode "SOURCE",6,,SOURCE
         ldr r0, =_binary_jonesforth_f_start
         PUSHDSP r0
         ldr r0, =_binary_jonesforth_f_size
-        PUSHDSP r0        
-        NEXT
-                
-defword "EMIT",4,,EMIT
-        .int EXIT
-        .int EXIT
+        PUSHNEXT r0
         
 defword "KEY",3,,KEY
         .int MEMKEY
@@ -758,6 +569,12 @@ defword "KEY",3,,KEY
 defword "WORD",4,,WORD
         .int MEMWORD
         .int EXIT
+        
+@ ' ( -- ) returns the codeword address of next read word
+@ only works in compile mode. Implementation is identical to LIT.
+defcode "'",1,,TICK
+        ldr r0, [FIP], #4
+        PUSHNEXT r0        
                 
 @ : word ( -- ) Define a new FORTH word
 @ : : WORD CREATE DOCOL , ] ;
@@ -770,22 +587,15 @@ defword ":",1,,COLON
 
 @ : ; IMMEDIATE LIT EXIT , [ ;
 defword ";",1,F_IMM,SEMICOLON
-        .int LIT, EXIT, COMMA           @ Append EXIT (so the word will return).
+        .int TICK, EXIT, COMMA           @ Append EXIT (so the word will return).
         .int LBRAC                      @ Go back to IMMEDIATE mode.
         .int EXIT                       @ Return from the function.
 
-
-@ ' ( -- ) returns the codeword address of next read word
-@ only works in compile mode. Implementation is identical to LIT.
-defcode "'",1,,TICK
-        ldr r1, [FIP], #4
-        PUSHDSP r1
-        NEXT
-
+       
 @ BRANCH ( -- ) changes FIP by offset which is found in the next codeword
 defcode "BRANCH",6,,BRANCH
-        ldr r1, [FIP]
-        add FIP, FIP, r1
+        ldr r0, [FIP]
+        add FIP, FIP, r0
         NEXT
 
 @ 0BRANCH ( p -- ) branch if the top of the stack is zero
@@ -802,46 +612,9 @@ defcode "LITS",4,,LITS
         PUSHDSP FIP             @ push address
         PUSHDSP r0              @ push string
         add FIP, FIP, r0        @ skip the string
-        add FIP, FIP, #3        @ find the next 4-byte boundary
-        and FIP, FIP, #~3
+        ALGN FIP        
         NEXT
     
-
-@ DIVMOD computes the unsigned integer division and remainder
-@ The implementation is based upon the algorithm extracted from 'ARM Software
-@ Development Toolkit User Guide v2.50' published by ARM in 1997-1998
-@ The algorithm is split in two steps: search the biggest divisor b^(2^n)
-@ lesser than a and then subtract it and all b^(2^i) (for i from 0 to n)
-@ to a.
-@ ( a b -- r q ) where a = q * b + r
-defcode "/MOD",4,,DIVMOD
-        POPDSP  r1                      @ Get b
-        POPDSP  r0                      @ Get a
-        bl _DIVMOD
-        PUSHDSP r0                      @ Put r
-        PUSHDSP r2                      @ Put q
-        NEXT
-
-@ on entry r0=numerator r1=denominator
-@ on exit r0=remainder r1=denominator r2=quotient
-_DIVMOD:                        @ Integer Divide/Modulus
-        mov     r3, r1                  @ Put b in tmp
-
-        cmp     r3, r0, LSR #1
-1:      movls   r3, r3, LSL #1          @ Double tmp
-        cmp     r3, r0, LSR #1
-        bls     1b                      @ Jump until 2 * tmp > a
-
-        mov     r2, #0                  @ Initialize q
-
-2:      cmp     r0, r3                  @ If a - tmp > 0
-        subcs   r0, r0, r3              @ a <= a - tmp
-        adc     r2, r2, r2              @ Increment q
-        mov     r3, r3, LSR #1          @ Halve tmp
-        cmp     r3, r1                  @ Jump until tmp < b
-        bhs     2b
-
-        bx lr
 
 @ QUIT ( -- ) the first word to be executed
 defword "QUIT", 4,, QUIT
@@ -885,8 +658,7 @@ defcode "INTERPRET",9,,INTERPRET
 6:  @ Parse error        
     @ just ignore it; must *NEVER* happen before we've established the new interpreter
         NEXT
-        
-        
+                
 @ EXECUTE ( xt -- ) jump to the address on the stack
 @-- WARNING! THIS MUST BE THE LAST WORD DEFINED IN ASSEMBLY (see LATEST) --@
 defcode "EXECUTE",7,,EXECUTE
@@ -902,16 +674,6 @@ return_stack:
         .space RETURN_STACK_SIZE
 return_stack_top:
 
-@ Reserve space for the return stack (1Kb)
-        .bss
-        .align 5                @ align to cache-line size
-        .set STRING_TABLE_SIZE, 0x8000
-        .set STRING_TABLE_MASK, 0x7fff
-string_table:
-        .space STRING_TABLE_SIZE
-string_table_end:
-
-
 @ Reserve space for new words and data structures (16Mb)
         .bss
         .align 5                @ align to cache-line size
@@ -919,11 +681,3 @@ string_table_end:
 data_segment:
         .space DATA_SEGMENT_SIZE
 data_segment_top:
-
-@ Reserve space for scratch-pad buffer (128b)
-        .bss
-        .align 5                @ align to cache-line size
-        .set SCRATCH_PAD_SIZE, 0x80
-scratch_pad:
-        .space SCRATCH_PAD_SIZE
-scratch_pad_top:

@@ -1,9 +1,10 @@
-: CONSTANT WORD CREATE DOCOL , ' LIT , , ' EXIT , ;
+: CONSTANT WORD CREATE DOCOL , ' ' , , ' EXIT , ;
 1 1 - CONSTANT 0
 1 1 + CONSTANT 2
 2 2 + CONSTANT 4
 2 1 + CONSTANT 3
 0 1 - CONSTANT -1
+
 
 : TRUE -1 ;
 : FALSE 0 ;
@@ -23,15 +24,16 @@
 : DROP DSP@ 4+ DSP! ;
 : DUP 0 PICK ;
 : OVER 1 PICK ;
+: SWAP OVER >R >R DROP <R <R ;
 : 2DROP DROP DROP ;
 : 2DUP OVER OVER ;
 : NIP SWAP DROP ;
+: -ROT SWAP >R SWAP R> ;
+: ROT 2 PICK >R >R >R DROP R> R> R> ;
 : +! DUP @ ROT + SWAP ! ;
 : -! DUP @ ROT - SWAP ! ;
-: / /MOD SWAP DROP ;
-: MOD /MOD DROP ;
-: NEGATE 0 SWAP - ;
 
+: NEGATE 0 SWAP - ;
 : <> = INVERT ;
 : >= < INVERT ;
 : <= > INVERT ;
@@ -45,7 +47,7 @@
 
 : ALLOT HERE @ SWAP HERE +! ;
 : CELLS 4* ;
-: VARIABLE 1 CELLS ALLOT WORD CREATE DOCOL , ' LIT , , ' EXIT , ;
+: VARIABLE 1 CELLS ALLOT WORD CREATE DOCOL , ' ' , , ' EXIT , ;
 
 : IMMEDIATE LATEST @ 4+ C@ F_IMMED OR LATEST @ 4+ C! ;
 LATEST @ 4+ C@ F_IMMED OR LATEST @ 4+ C!       
@@ -56,7 +58,7 @@ LATEST @ 4+ C@ F_IMMED OR LATEST @ 4+ C!
 : CHAR WORD DROP C@ ;
 : [COMPILE] IMMEDIATE WORD FIND >CFA , ;
 : ~ WORD CREATE DOCOL , LATEST @ HIDDEN ]] ;
-: ~ IMMEDIATE LIT EXIT , LATEST @ HIDDEN [COMPILE] [[ ;
+: ~ IMMEDIATE ' EXIT , LATEST @ HIDDEN [COMPILE] [[ ;
 CHAR ; LATEST @ 4+ 1+ C!
 CHAR : LATEST @ @ 4+ 1+ C!
 
@@ -75,7 +77,9 @@ CHAR : LATEST @ @ 4+ 1+ C!
 : ENDOF IMMEDIATE [COMPILE] ELSE ;
 : ENDCASE IMMEDIATE ' DROP , BEGIN ?DUP WHILE [COMPILE] THEN REPEAT ;
 
-: LITERAL IMMEDIATE ' LIT , , ;
+
+
+: LITERAL IMMEDIATE ' ' , , ;
 : ':' [[ CHAR : ]] LITERAL ;
 : ';' [[ CHAR ; ]] LITERAL ;
 : '(' [[ CHAR ( ]] LITERAL ;
@@ -94,8 +98,20 @@ CHAR : LATEST @ @ 4+ 1+ C!
 ( comments are now available! )
 
 
+( MUST IMPLEMENT  /MOD )
+
+: /MOD DIVSRC DIVSUB ;
+: / /MOD DROP ; 
+: MOD /MOD SWAP DROP ; 
+ 
 ( parse numbers )
 0 VARIABLE TNUM
+
+( define the BASE variable )
+0 4+ 4+ 2+ CONSTANT 10
+10 VARIABLE BASE
+
+
 'A' '9' '0' - 1+ - CONSTANT A10 
 : ISDIGIT DUP '0' >= SWAP '9' <= AND ;
 : MULBASE  TNUM @ BASE @ * TNUM ! ;
@@ -119,10 +135,15 @@ CHAR : LATEST @ @ 4+ 1+ C!
     ( -- n e ) ;
 
 ( String handling )
+
+( note that emit is backpatched later! )
+: EMIT EXIT EXIT ;
 : TELL DUP 0> IF BEGIN SWAP DUP C@ EMIT 1+ SWAP 1- DUP 0<= UNTIL THEN DROP DROP ;
 : ALIGNED ( c-addr -- a-addr ) 3 + 3 INVERT AND ;
 : ALIGN HERE @ ALIGNED HERE ! ;
 : C, HERE @ C! 1 HERE +! ;
+
+
 : S" IMMEDIATE ( -- addr len )
 	STATE @ IF 
 		' LITS , HERE @ 0 ,
@@ -145,7 +166,7 @@ CHAR : LATEST @ @ 4+ 1+ C!
         DROP 2DUP NUMBER ( must be a number or invalid token ) 
         0<> IF DROP S" Unknown word <" TELL TELL S" >
 " TELL
-            ELSE NIP NIP STATE @ IF ' LIT , , THEN                
+            ELSE NIP NIP STATE @ IF ' ' , , THEN                
             THEN
         ELSE 
             NIP NIP             
@@ -161,10 +182,14 @@ QUIT
 ( now we are running in our own interpreter )
 ( and we have numbers as literals! )
 
+( version number )
+8 CONSTANT VERSION
+
 ( line comments )
 : '\n' 10 ;
 : \ IMMEDIATE BEGIN KEY '\n' = UNTIL ;
 
+\ now create some shorthands for base switching
 : HEX 16 BASE ! ;
 : DECIMAL 10 BASE ! ;
 
@@ -360,25 +385,6 @@ PUBLIC:
 }}
 
 
-\ quotations
-
-\ space to store quotations
-16000 ALLOT CONSTANT QUOTEBLOCK
-QUOTEBLOCK VARIABLE: QUOTEHERE
-\ recursive quotes don't work :(
-: [ IMMEDIATE QUOTEHERE @ STATE @ IF ' LIT , , THEN STATE @ HERE @ QUOTEHERE @ HERE ! DOCOL , ]] ;
-: ] IMMEDIATE LIT EXIT , HERE @ QUOTEHERE ! HERE ! STATE ! ;
-: QIF IF NIP EXECUTE ELSE DROP EXECUTE THEN ;
-: QIFTRUE IF EXECUTE ELSE DROP THEN ;
-: QIFFALSE IF DROP ELSE EXECUTE THEN ;
-: QWHILE >R BEGIN R> DUP >R EXECUTE INVERT UNTIL R> DROP ; 
-: QUNTIL >R BEGIN R> DUP >R EXECUTE UNTIL R> DROP ; 
-\ : QTIMES >R 0 DO R> DUP >R EXECUTE LOOP R> DROP ;
-\ : ITER >R 0 DO R> DUP >R I EXECUTE LOOP R> DROP ;
-\ : ITERD >R >R  BEGIN R> DUP >R EXECUTE  R> R> 1- -ROT >R >R 0= UNTIL R> R> DROP DROP ; 
-: QPRESERVE DUP >R @ >R  EXECUTE R> R> SWAP ! ;
-: QDIP >R EXECUTE R> ;
-: QSIP DUP >R EXECUTE R> ;
 
 
 \ Original JONESFORTH introspection functions        
@@ -386,14 +392,14 @@ QUOTEBLOCK VARIABLE: QUOTEHERE
 : ID. 4+ COUNT F_LENMASK AND BEGIN DUP 0> WHILE SWAP COUNT EMIT SWAP 1- REPEAT 2DROP ;
 : >DFA >CFA 4+ ;
 : DICT WORD FIND ;
-: VALUE ( n -- ) WORD CREATE DOCOL , ' LIT , , ' EXIT , ;
+: VALUE ( n -- ) WORD CREATE DOCOL , ' ' , , ' EXIT , ;
 : TO IMMEDIATE ( n -- )
         DICT >DFA 4+
-	STATE @ IF ' LIT , , ' ! , ELSE ! THEN
+	STATE @ IF ' ' , , ' ! , ELSE ! THEN
 ;
 : +TO IMMEDIATE
         DICT >DFA 4+
-	STATE @ IF ' LIT , , ' +! , ELSE +! THEN
+	STATE @ IF ' ' , , ' +! , ELSE +! THEN
 ;
 
 : ?HIDDEN 4+ C@ F_HIDDEN AND ;
@@ -410,7 +416,7 @@ QUOTEBLOCK VARIABLE: QUOTEHERE
 	DUP ?IMMEDIATE IF ." IMMEDIATE " THEN
 	>DFA BEGIN 2DUP
         > WHILE DUP @ CASE
-		' LIT OF 4 + DUP @ . ENDOF
+		' ' OF 4 + DUP @ . ENDOF
 		' LITS OF [[ CHAR S ]] LITERAL EMIT '"' EMIT SPACE
 			4 + DUP @ SWAP 4 + SWAP 2DUP TELL '"' EMIT SPACE + ALIGNED 4 -
 		ENDOF
@@ -422,8 +428,7 @@ QUOTEBLOCK VARIABLE: QUOTEHERE
 	ENDCASE 4 + REPEAT
 	';' EMIT CR 2DROP
 ;
-: :NONAME 0 0 CREATE HERE @ DOCOL , ]] ;
-: ['] IMMEDIATE ' LIT , ;
+: ['] IMMEDIATE ' ' , ;
 
 
 \ compile a word by expanding it in place
@@ -489,30 +494,6 @@ LOOPSP @ CONSTANT LOOPTOP
 
 \ append a character to a string on the stack; must be enough room in the buffer
 : SUFFIX 1+ SWAP OVER + ROT SWAP -ROT C! SWAP ;
-
-
-\ basic linked list/stack
-: LIST.MK 2 CELLS ALLOT DUP 4+ 0 ! ( -- listptr[val,ptr] ) ;
-: LIST.NIL 0 ;
-: LIST.CONS ( car cdr -- cons ) SWAP LIST.MK DUP -ROT ! DUP ROT SWAP 4+ ! ;
-: LIST.CDR ( listptr -- listptr ) 4+ @ ;
-: LIST.CAR ( listptr -- val ) @ ;
-: LIST.NTH ( listptr n -- val ) 0 DO LIST.CDR LOOP LIST.CAR ;
-
-: LIST.PUSH BEGIN DUP LIST.CAR SWAP LIST.CDR DUP 0= UNTIL DROP ;
-: LIST.CREATE ( n1 n2 n3 n4 ... n -- listptr )  LIST.NIL SWAP 0 DO LIST.CONS LOOP ;
-: LIST.MAPCAR >R BEGIN DUP LIST.CAR R> DUP >R EXECUTE DUP LIST.CDR 0= IF DROP TRUE ELSE LIST.CDR FALSE THEN UNTIL R> DROP ;
-: LIST.PRINT ['] . LIST.MAPCAR ;
-VARIABLE LIST.FILTERED
-: LIST.FILTER NIL LIST.FILTERED ! >R BEGIN DUP LIST.CAR DUP R> DUP >R EXECUTE IF LIST.FILTERED @ CONS LIST.FILTERED ! ELSE DROP THEN DUP LIST.CDR 0= IF DROP TRUE ELSE LIST.CDR FALSE THEN UNTIL R> DROP ;
-
-VARIABLE LIST.PRODUCT
-: LIST.REDUCE >R DUP LIST.CAR LIST.PRODUCT ! LIST.CDR BEGIN DUP LIST.CAR LIST.PRODUCT @ R> DUP >R EXECUTE LIST.PRODUCT ! DUP LIST.CDR 0= IF DROP TRUE ELSE LIST.CDR FALSE THEN UNTIL R> DROP LIST.PRODUCT @ ;
-
-: LIST.LAST BEGIN DUP LIST.CDR 0<> WHILE LIST.CDR REPEAT ;
-: LIST.MAKE_ENDLESS DUP DUP LIST.LAST 4+ ! ;
-
-: TESTLIST 1 2 3 4 5 5 LIST.CREATE ;
 
 \ ANSI codes
 
@@ -590,56 +571,7 @@ PUBLIC:
 : QUOTE WORD FIND >CFA ( -- xt ) ;
 : BACKPATCH QUOTE QUOTE 4+ ! ;
 
-
-
-
 : UARTIN_TIMEOUT TIMER_READ + BEGIN UARTINREADY IF UARTGET EXIT ELSE DUP TIMER_READ < IF -1 EXIT THEN THEN AGAIN ;
-
-
-{{    
-    16# 4 CONSTANT X_EOT
-    16# 1 CONSTANT X_SOH
-    16# 6 CONSTANT X_ACK
-    16# 15 CONSTANT X_NAK
-    16# 18 CONSTANT X_CAN 
-    
-    : SOH X_SOH UARTEMIT ;
-    : EOT X_EOT UARTEMIT ;
-    : ACK X_ACK UARTEMIT ;
-    : NAK X_NAK UARTEMIT ;
-    : CAN X_CAN UARTEMIT ;    
-    
-    : WAITCHAR 250000 UARTIN_TIMEOUT ;
-    : XMODEM_FLUSH BEGIN WAITCHAR -1 = UNTIL ;
-    
-    VARIABLE RCV_LIMIT 
-    VARIABLE RCV_ADDR 
-    VARIABLE RCV_LEN
-    VARIABLE BLK
-    VARIABLE ERRCOUNT
-    0 VARIABLE: RCV_DONE
-    : SECS 1000000 * ;
-    
-    : XMODEM_CANCEL CAN CAN CAN ;
-    VARIABLE CHKSUM
-    : RCV_BYTES  0 DO WAITCHAR DUP CHKSUM +! OVER C! 1+ LOOP  ;
-    : XMODEM_BLKNO WAITCHAR BLK @ <> IF FALSE EXIT THEN WAITCHAR 255 BLK @ - <> IF FALSE EXIT THEN TRUE ;
-    : XMODEM_NEXT 128 RCV_ADDR +! 1 BLK +! 128 RCV_LEN +! ;
-    : XMODEM_BLOCK XMODEM_BLKNO NOT IF FALSE EXIT THEN 0 CHKSUM ! RCV_ADDR 128 RCV_BYTES WAITCHAR CHKSUM @ <> IF FALSE EXIT THEN XMODEM_NEXT TRUE ;    
-    : XMODEM_ERROR XMODEM_FLUSH NAK ERRCOUNT ++ ;
-    : XMODEM_HEADER BEGIN 
-        ERRCOUNT @ 10 > IF XMODEM_CANCEL -1 RCV_LEN ! EXIT THEN ( break on too many errors )        
-        XMODEM_ERROR 3 SECS UARTIN_TIMEOUT DUP ( NAK every 3 seconds ) 
-        X_EOT = IF ACK DROP EXIT ELSE  ( check if done )
-        X_SOH = IF XMODEM_BLOCK IF ACK ELSE XMODEM_ERROR THEN ELSE XMODEM_ERROR THEN ( if data, read it )
-        AGAIN ;
-PUBLIC:
-    : XMODEM_RCV ( addr max -- ) 0 ERRCOUNT ! RCV_LIMIT ! RCV_ADDR ! 0 RCV_LEN ! XMODEM_HEADER RCV_LEN @ ;
-    : XMODEM_RECV ." Begin XMODEM transfer" CR XMODEM_RCV DUP -1 = IF ." Transfer failed!" CR ELSE ." Transfer succeeded; " DUP . ." bytes transfered" CR THEN ;
-}}    
-
-
-
 
 \ allow input redirection by redefining INPUT-STREAM
 \ INPUT-STREAM points at a word that retrieves one more character from the input
@@ -650,7 +582,6 @@ VARIABLE OUTPUT-STREAM QUOTE UARTEMIT OUTPUT-STREAM !
 : NEMIT OUTPUT-STREAM @ EXECUTE ;
 BACKPATCH NKEY KEY
 BACKPATCH NEMIT EMIT
-
 
 \ rewrite WORD to use the new KEY function
 : APPEND ( c addr -- ) DUP C++ DUP C@ + C! ;
@@ -680,21 +611,6 @@ WORDBUFFER# 1+ CONSTANT WORDBUFFER
 ( backpatch word to actually execute nword )
 BACKPATCH NWORD WORD
 
-
-
-\ 16 CONSTANT HISTORY_LINES
-\ VARIABLE HISTORY_PTR 
-\ : ALLOCATE_HISTORY_LINE 256 ALLOT ;
-\ 4 CONSTANT HISTORY_LINES
-\ HERE @ CONSTANT HISTORY_START ALLOCATE_HISTORY_LINE ALLOCATE_HISTORY_LINE ALLOCATE_HISTORY_LINE ALLOCATE_HISTORY_LINE
-\ make loop here
-\ : NEXT_HISTORY HISTORY_PTR 1+ DUP > HISTORY_LINES IF 0 THEN HISTORY_PTR ! ;
-\ : PREV_HISTORY HISTORY_PTR 1- DUP < 0 IF HISTORY_LINES 1- THEN HISTORY_PTR ! ;
-\ : HISTORY_BUF HISTORY_PTR @ 8 LSHIFT HISTORY_START +
-\ : COPY_HISTORY HISTORY_BUF TIB# 256 CMOVE ;
-\ : PUSH_HISTORY TIB# HISTORY_BUF 256 CMOVE ;
-
-
 256 BUFFER TIB#
 TIB# 1+ CONSTANT TIB
 VARIABLE TIB_CURSOR 
@@ -720,8 +636,6 @@ VARIABLE >IN 0 >IN !
     
 \ buffer for ansi value field    
 32 BUFFER ESCAPE_BUF
-
-
 
 VARIABLE TABPTR
 : RESET_TAB LATEST @ TABPTR ! ;
@@ -756,13 +670,6 @@ VARIABLE TABPTR
     >IN @ TIB# LENSTR >= IF CLEAR_TIB THEN 
 ;
 
-\ left, right
-\ home, end
-\ ins/over
-\ up/down buffer
-\ tab completion
-
-
 
 : STATUS  ." HERE:0x" HERE @ .HEX  ." LATEST:0x" LATEST @ .HEX  2 SPACES ." R0:0x" R0 .HEX  ." RSP:0x" RSP@ .HEX 2 SPACES ." DSP:0x" DSP@ .HEX  ." S0:0x" S0 @ .HEX  CR ;
 
@@ -785,151 +692,11 @@ DECIMAL
 ;
 
 
-
-
-    
-\ experimental stuff
-
-( signed division )
-
-
-\ heap manipulation
-\ | SIZE | PREV | NEXT | REFC | TYPE |
-: H->SIZE 0 ;
-: H->PREV 4 + ;
-: H->NEXT 8 +  ;
-: H->REFC 12 + ;
-: H->TYPE 16 +  ;
-
-20 CONSTANT HEADER_SIZE
-PAD 128 + CONSTANT HEAP_START
-16# 1000000 CONSTANT HEAP_SIZE
-HEAP_SIZE VARIABLE: HEAP_AVAILABLE
-: !-> SWAP DUP -ROT ! 4+ ; 
-: INIT_HEAP HEAP_START HEAP_SIZE !-> 0 !-> 0 !-> 0 !-> 0 !-> DROP ;
-: BLOCKFITS DUP H->TYPE @ 0= OVER H->SIZE @ > AND ;
-: BLOCKNEXT DUP H->NEXT @ 0= IF ." Memory exhausted" ABORT THEN ;
-\ : NEWBLOCK ( n ptr -- ) OVER HEADER_SIZE + SIZE @ !-> PREV @ !-> NEXT @ 0 !-> 0 !-> ;
-\ : FINDFREE ( n -- ptr ) HEAP_START BLOCKFITS NOT IF BEGIN BLOCKNEXT BLOCKFITS UNTIL  ;
-: FREE ( ptr -- ) ;
-: REALLOC ( n -- ptr ) ;
-
-: S/MOD 
-TUCK DUP 0<
-IF NEGATE TRUE ELSE FALSE THEN 
-ROT
-DUP 0< IF NEGATE -ROT INVERT ELSE -ROT THEN -ROT /MOD ROT
-IF NEGATE 1- SWAP ROT SWAP - ELSE ROT DROP THEN ;
-
-
-
-
-
-: LOOPTEST 5 0 DO I . LOOP ;
-: IJLOOPTEST 5 0 DO 10 0 DO I . J . LOOP LOOP ;
-: +LOOPTEST 50 0 DO I . 5 +LOOP ;
-
-
-\ Framebuffer access (preliminary)
-: MKSTRUCT  HERE @ CONSTANT ;
-: DW 1 CELLS ALLOT CONSTANT ;
-
-4 NALIGN
-MKSTRUCT FRAMEBUFFER
-DW FB_PHYSICAL_WIDTH
-DW FB_PHYSICAL_HEIGHT
-DW FB_VIRTUAL_WIDTH
-DW FB_VIRTUAL_HEIGHT
-DW FB_PITCH
-DW FB_BIT_DEPTH
-DW FB_X
-DW FB_Y
-DW FB_PTR
-DW FB_SIZE
-
-30 NTHBIT CONSTANT BIT30
-
-16# 2000B880 CONSTANT MAILREAD_ADDR
-16# 2000B890 CONSTANT MAILPOLL_ADDR
-16# 2000B894 CONSTANT MAILSENDER_ADDR
-16# 2000B898 CONSTANT MAILSTATUS_ADDR
-16# 2000B89C CONSTANT MAILCONFIG_ADDR
-16# 2000B89C CONSTANT MAILWRITE_ADDR
-
-: MAILWAIT_STATUS BEGIN MAILSTATUS_ADDR @ BIT30 AND 0= UNTIL ; 
-: LOW4BITS 2# 1111 AND ;
-: MAILREAD ( mbox ) LOW4BITS BEGIN MAILWAIT_STATUS DUP MAILREAD_ADDR @ XOR DUP LOW4BITS 0= UNTIL 4 RSHIFT ;
-: MAILWRITE ( msg mbox -- ) MAILWAIT_STATUS SWAP 4 LSHIFT OR MAILWRITE_ADDR ! ;
-
-: MAPCHAR NEXTCHAR 3 PICK EXECUTE ROT DUP -ROT 1- C! SWAP ( xt addr len -- xt addr+1 len-1 ) ; 
-: MAPSTR 2 PICK 2 PICK BEGIN MAPCHAR DUP 0= UNTIL DROP DROP DROP ( addr len xt -- addr len ) ;
-: +13 13 + ;
-: ROT13 QUOTE +13 MAPSTR ;
-
-( N D Q R )
-VARIABLE DIVD
-VARIABLE DIVN
-
-: DIVSTEP RSHIFT DIVN @  1 AND OR DUP 4 PICK >= IF 2 PICK - SWAP 1 OR SWAP THEN ;
-: DIVI 
-    DIVN ! DIVD !
-    DIVD @ 0= IF ." Divide by zero" ABORT THEN
-    0 0
-    
-    DIVSTEP   
-;
-
 \ redirect input
 
 CLEAR_TIB LEDOFF WELCOME 
 \ Everything after this line will not be seen!
 QUOTE LINE_KEY INPUT-STREAM !
-
-
-
-\ ARM opcodes
-
-\ 0 VARIABLE OPC
-\ : ENUM 0 OPC ! BEGIN OPC @ CONSTANT OPC 1 +! 1- 0= UNTIL ;
-: ENUM{ BEGIN WORD 2DUP DROP C@ '}' <> WHILE REPEAT ;
-\ 16 ENUM{ EQ NE CS CC MI PL VS VC HI LS GE LT GT LE AL UNC }
-\ data processing opcodes
-\ 16 ENUM{ AND EOR SUB RSB ADD ADC SBC RSC TST TEQ CMP CMN ORR MOV BIC MVN }
-
-\ EQ R4 45 # 2 LSL ORR;
-\ R4 R0 2 ROR MOV;
-
-
-\ VARIABLE ASM.COND
-\ VARIABLE ASM.SHIFTER
-\ VARIABLE ASM.Rn
-\ VARIABLE ASM.Rd
-\ VARIABLE ASM.#
-
-
-
-
-\ TODO
-\ line editor
-\ ?do / LEAVE / UNLOOP
-\ clear / cmove / fill / blank
-\ make word names indirect : | FLAGS | STRPTR | CFA | | CODE ...
-\ namespaces
-\ debugger
-\ toupper / tolower
-\ strcompare
-\ make quotations work in compile mode
-\ mmc
-\ xmodem transfer
-\ signed division
-\ inline / code
-\ locals
-\ framebuffer
-\ fixed point: */ .FX / SIN.COS / SQRT / EXP
-\ live syntax highlighting / tab completion
-\ alloc / free / resize
-\ structs, lists
-\ inline / unthread / unthread-fully / denext
 
 
 
