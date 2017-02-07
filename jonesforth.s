@@ -61,11 +61,7 @@ FIP     .req    r10
         .macro POPDSP reg
         ldr     \reg, [DSP], #4
         .endm
-
-        .macro PUSH2 reg
-        stmdb   \reg!, {r0-r1}          @ ( -- r1 r0 )
-        .endm
-
+        
         .macro POP2 reg
         ldmia   \reg!, {r0-r1}          @ ( r1 r0 -- )
         .endm        
@@ -150,8 +146,7 @@ cold_start:
 @@ and FORTH constants.
 
 @ define the word flags
-        .set F_IMM, 0x80
-        .set F_HID, 0x20
+        .set F_IMM, 0x80        
         .set F_LEN, 0x1f
 
 @ link is used to chain the words in the dictionary as they are defined
@@ -249,12 +244,6 @@ var_\name :
         defconst "R0",2,,R0,return_stack_top
 @  DOCOL           Pointer to _DOCOL.
         defconst "DOCOL",5,,DOCOL,_DOCOL
-@  F_IMMED         The IMMEDIATE flag's actual value.
-        defconst "F_IMMED",7,,F_IMMED,F_IMM
-@  F_HIDDEN        The HIDDEN flag's actual value.
-        defconst "F_HIDDEN",8,,F_HIDDEN,F_HID
-@  F_LENMASK       The length mask in the flags/len byte.
-        defconst "F_LENMASK",9,,F_LENMASK,F_LEN
 @ 1 itself (since we can't parse numbers yet!)        
         defconst "1",1,,ONE,1        
 
@@ -269,12 +258,12 @@ defcode "-",1,,SUB
         PUSHNEXT r0
         
 @ LSHIFT ( a b -- a<<b )
-defop "LSHIFT",6,,LSHIFT
+defop "<<",6,,LSHIFT
         mov r0, r1, LSL r0
         PUSHNEXT r0
         
 @ RSHIFT ( a b -- a>>b )
-defop "RSHIFT",6,,RSHIFT
+defop ">>",6,,RSHIFT
         mov r0, r1, LSR r0
         PUSHNEXT r0
         
@@ -413,27 +402,18 @@ _WORD:
         cmp r0, #' '
         ble 1b                   @ skip blank character
 
-        ldr     r6, =word_buffer
-2:
-        strb r0, [r6], #1        @ store character in word buffer
+        ldr  r6, r2
+2:        
         bl _MEMKEY               @ read more characters until a space is found
         cmp r0, #' '
         bgt 2b
 
-        ldr r0, =word_buffer    @ r0, address of word
-        sub r1, r6, r0          @ r1, length of word
+        ldr r0, r2              @ r0, address of word
+        sub r1, r2, r0          @ r1, length of word
 
         ldmfd sp!, {r6,lr}      @ restore r6 and lr
         bx lr
 
-@ word_buffer for WORD
-        .data
-        .align 5                @ align to cache-line size
-word_buffer:
-        .space 32               @ FIXME: what about overflow!?
-        .int 0
-word_length:
-        .space 1
 
 @ FIND ( addr length -- dictionary_address )
 @ Tries to find a word in the dictionary and returns its address.
@@ -452,7 +432,7 @@ _FIND:
         cmp r3, #0                      @ did we check all the words ?
         beq 4f                          @ then exit
         ldrb r2, [r3, #4]               @ read the length field
-        and r2, r2, #(F_HID|F_LEN)      @ keep only length + hidden bits
+        and r2, r2, #2f                 @ keep only length + hidden bits
         cmp r2, r1                      @ do the lengths match ?
                                         @ (note that if a word is hidden,
                                         @  the test will be always negative)
@@ -469,7 +449,7 @@ _FIND:
         bne 3f                          @ if they do not match, branch to 3
         subs r2,r2,#1                   @ decrement length
         bne 2b                          @ loop
-                                        @ here, strings are equal
+                                        @ here, strings are equalFT
         b 4f                            @ branch to 4
 
 3:
@@ -570,7 +550,7 @@ defword "WORD",4,,WORD
         .int MEMWORD
         .int EXIT
         
-@ ' ( -- ) returns the codeword address of next read word
+@ '' ( -- ) returns the codeword address of next read word
 @ only works in compile mode. Implementation is identical to LIT.
 defcode "'",1,,TICK
         ldr r0, [FIP], #4
