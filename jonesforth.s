@@ -555,7 +555,7 @@ defcode "HASHINT",7,,HASHINT
         
 @ MEMKEY ( -- c ) Read the next character from the built in source buffer
 defcode "MEMKEY",6,,MEMKEY
-        bl srcchar
+        bl _MEMKEY
         PUSHDSP r0        
         NEXT        
 @ read one character from the pre-loaded source 
