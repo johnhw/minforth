@@ -251,6 +251,11 @@ DECIMAL
 : UARTKEY UARTRAWKEY DUP 3 = IF BREAK THEN DUP 13 = IF DROP 10 THEN ;
 UARTINIT
 
+65 UARTPUT 66 UARTPUT '\n' UARTEMIT
+
+: UARTTELL DUP 0> IF BEGIN SWAP DUP C@ UARTEMIT 1+ SWAP 1- DUP 0<= UNTIL THEN DROP DROP ;
+: UARTLINE UARTTELL '\n' UARTEMIT ;
+
 : ." IMMEDIATE ( -- )
 	STATE @ IF
 		[COMPILE] S" ' TELL ,
@@ -259,6 +264,7 @@ UARTINIT
 	THEN
 ;
 
+S" Memory" UARTLINE
 \ Memory words
 : C++ DUP C@ 1+ SWAP C! ;
 : C-- DUP C@ 1- SWAP C! ;
@@ -269,6 +275,7 @@ UARTINIT
 : ->C 1 SWAP +! ;
 : <-C 1 SWAP -! ;
 
+S" Characters" UARTLINE
 \ Character constants
 : BKSP 8 ;
 : NL 10 ;
@@ -280,7 +287,7 @@ UARTINIT
 : SPACES ( n -- ) BEGIN DUP 0> WHILE SPACE 1- REPEAT DROP ;
 : ZEROS ( n -- ) BEGIN DUP 0> WHILE '0' EMIT 1- REPEAT DROP ;
 
-
+S" Numbers" UARTLINE
 \ write out unsigned numbers
 64 BUFFER  NUMPAD
 63 NUMPAD + CONSTANT TOPPAD
@@ -291,7 +298,8 @@ UARTINIT
 : PDOT CLEARPAD BEGIN BASE @ /MOD SWAP DIGIT DUP 0= UNTIL DROP ;
 : UDOT PDOT PUSHPAD ;
 : DOT DUP 0< IF NEGATE PDOT '-' WRITECHAR ELSE PDOT THEN PUSHPAD ;
-    
+
+S" Aligned" UARTLINE    
 \ aligned unsigned
 : U.R UDOT ROT OVER - SPACES TELL ;
 : U.ZR UDOT ROT OVER - ZEROS TELL ;
@@ -305,11 +313,14 @@ UARTINIT
 : .HEX BASE @ SWAP HEX . BASE ! ;
 : .OCTAL BASE @ SWAP OCTAL . BASE ! ;
 
+S" FIXED" UARTLINE
+
 \ Fixed point
 : .INTEGER 16 RSHIFT DOT TELL  ;
 : .FRACTIONAL 16BITMASK AND BEGIN 10 * DUP 16 RSHIFT '0' + EMIT 16BITMASK AND DUP 0= UNTIL ;
 : .X DUP .INTEGER '.' EMIT .FRACTIONAL ;
 
+S" Base" UARTLINE
 \ Base switching words
 : # ( b -- n ) BASE @ SWAP BASE ! WORD NUMBER DROP SWAP BASE ! ;
 : 16# 16 # ;
@@ -319,6 +330,7 @@ UARTINIT
 : BINARY ( -- ) 2 BASE ! ;
 : OCTAL ( -- ) 8 BASE ! ;
 
+S" Standard" UARTLINE
 \ standard words
 : ON TRUE SWAP ! ;
 : OFF FALSE SWAP ! ;
@@ -339,6 +351,7 @@ UARTINIT
 : VARIABLE: VARIABLE LATEST @ >CFA EXECUTE ! ;
 : RECURSE IMMEDIATE LATEST @ >CFA , ;
 
+S" Namespaces" UARTLINE
 \ Private namespaces
 VARIABLE HIDDEN_BLOCK
 VARIABLE REVEAL_BLOCK
@@ -348,6 +361,7 @@ VARIABLE REVEAL_BLOCK
 : }} REVEAL_BLOCK @ DUP 0= IF DROP LATEST THEN BEGIN @ DUP +HIDDEN DUP HIDDEN_BLOCK @ = UNTIL DROP ;
 
 
+S" Stack printing" UARTLINE
 \ stack printing
 {{
     VARIABLE TSP
@@ -362,6 +376,7 @@ PUBLIC:
 
 \ quotations
 
+S" Quotations" UARTLINE
 \ space to store quotations
 16000 ALLOT CONSTANT QUOTEBLOCK
 QUOTEBLOCK VARIABLE: QUOTEHERE
@@ -380,7 +395,7 @@ QUOTEBLOCK VARIABLE: QUOTEHERE
 : QDIP >R EXECUTE R> ;
 : QSIP DUP >R EXECUTE R> ;
 
-
+S" Introspection" UARTLINE
 \ Original JONESFORTH introspection functions        
 : COUNT DUP 1+ SWAP C@  ;
 : ID. 4+ COUNT F_LENMASK AND BEGIN DUP 0> WHILE SWAP COUNT EMIT SWAP 1- REPEAT 2DROP ;
@@ -395,6 +410,7 @@ QUOTEBLOCK VARIABLE: QUOTEHERE
         DICT >DFA 4+
 	STATE @ IF ' LIT , , ' +! , ELSE +! THEN
 ;
+
 
 : ?HIDDEN 4+ C@ F_HIDDEN AND ;
 : ?IMMEDIATE 4+ C@ F_IMMED AND ;
@@ -425,10 +441,11 @@ QUOTEBLOCK VARIABLE: QUOTEHERE
 : :NONAME 0 0 CREATE HERE @ DOCOL , ]] ;
 : ['] IMMEDIATE ' LIT , ;
 
-
+S" Expansion" UARTLINE
 \ compile a word by expanding it in place
 \ : EXPAND IMMEDIATE STATE @ IF HERE 4- @ WORDEXTENTS HERE @ HERE 4- ! BEGIN DUP @ , 4+ 2DUP = UNTIL THEN ;
 
+S" Exceptions" UARTLINE
 \ Exception handling
 : EXCEPTION-MARKER R> DROP 0 ;
 : CATCH ( xt -- exn? ) DSP@ 4+ >R ' EXCEPTION-MARKER 4+ >R EXECUTE ;
@@ -453,7 +470,7 @@ QUOTEBLOCK VARIABLE: QUOTEHERE
 : UNUSED ( -- n ) PAD HERE @ - 4/ ;
 
 
-
+S" Dumping" UARTLINE
 \ Hex dumping of memory
 
 {{
@@ -473,6 +490,8 @@ PUBLIC:
         CR 2DROP BASE ! ;
 }}
 
+
+S" Counted" UARTLINE
 \ Counted loops
 32 CELLS ALLOT VARIABLE: LOOPSP
 LOOPSP @ CONSTANT LOOPTOP
@@ -490,7 +509,7 @@ LOOPSP @ CONSTANT LOOPTOP
 \ append a character to a string on the stack; must be enough room in the buffer
 : SUFFIX 1+ SWAP OVER + ROT SWAP -ROT C! SWAP ;
 
-
+S" Lists" UARTLINE
 \ basic linked list/stack
 : LIST.MK 2 CELLS ALLOT DUP 4+ 0 ! ( -- listptr[val,ptr] ) ;
 : LIST.NIL 0 ;
@@ -514,6 +533,7 @@ VARIABLE LIST.PRODUCT
 
 : TESTLIST 1 2 3 4 5 5 LIST.CREATE ;
 
+S" ANSI" UARTLINE
 \ ANSI codes
 
 27 CONSTANT ESC
@@ -547,8 +567,21 @@ VARIABLE ANSI_BG_SET
 : ANSI_DEFAULT 37 ANSICOLOR 40 ANSICOLOR ;
 : ANSI_ERROR ANSI_BLACK ANSI_BG ANSI_RED ANSI_FG ;
 
-
+S" Timer" UARTLINE
 \ System functions
+
+
+
+\ Load a hex block from the stream. Terminate with non-number
+{{
+    16# 100000 CONSTANT UPLOAD_ADDRESS
+    VARIABLE BOOT_ADDRESS
+    : HEXLOAD HEX BEGIN DUP WORD NUMBER 0= IF SWAP C! 1+ FALSE ELSE DROP TRUE THEN UNTIL ;
+PUBLIC:
+    : UPLOAD ." Start hex transfer:" CR HEX UPLOAD_ADDRESS HEXLOAD ." OK: 0x" UPLOAD_ADDRESS - . ." bytes transferred." CR ;
+    : BOOT UPLOAD_ADDRESS BOOT_ADDRESS ! BOOT_ADDRESS EXECUTE ;
+}}
+
 
 \ Timer access
 {{
@@ -568,24 +601,15 @@ PUBLIC:
     \ Profile run time of a word: e.g. 200 30 RUNTIME + 
     \ compute the call overhead 
     : CALC_OVERHEAD TIMER_READ TIMEITVAR ! TIMER_READ TIMEITVAR @ - TIMEIT_OVERHEAD ! ;
-    CALC_OVERHEAD FORGET CALC_OVERHEAD
+\    CALC_OVERHEAD FORGET CALC_OVERHEAD
     : RUNTIME WORD FIND >CFA TIMER_READ TIMEITVAR ! EXECUTE TIMER_READ TIMEITVAR @ - TIMEIT_OVERHEAD @ - ;
     \ adjust the timer waiting
-    200 RUNTIME TIMER_WAIT 200 - WAIT_ADJUSTMENT !
+ \   200 RUNTIME TIMER_WAIT 200 - WAIT_ADJUSTMENT !
     : TIMEIT RUNTIME . ." uS" ;
 }}
 
 
-\ Load a hex block from the stream. Terminate with non-number
-{{
-    16# 100000 CONSTANT UPLOAD_ADDRESS
-    VARIABLE BOOT_ADDRESS
-    : HEXLOAD HEX BEGIN DUP WORD NUMBER 0= IF SWAP C! 1+ FALSE ELSE DROP TRUE THEN UNTIL ;
-PUBLIC:
-    : UPLOAD ." Start hex transfer:" CR HEX UPLOAD_ADDRESS HEXLOAD ." OK: 0x" UPLOAD_ADDRESS - . ." bytes transferred." CR ;
-    : BOOT UPLOAD_ADDRESS BOOT_ADDRESS ! BOOT_ADDRESS EXECUTE ;
-}}
-
+S" Quote" UARTLINE
 \ quote that works in immediate mode
 : QUOTE WORD FIND >CFA ( -- xt ) ;
 : BACKPATCH QUOTE QUOTE 4+ ! ;
@@ -640,7 +664,7 @@ PUBLIC:
 
 
 
-
+S" Streams" UARTLINE
 \ allow input redirection by redefining INPUT-STREAM
 \ INPUT-STREAM points at a word that retrieves one more character from the input
 \ OUTPUT-STREAM points at a word that outputs a single character
@@ -676,7 +700,7 @@ WORDBUFFER# 1+ CONSTANT WORDBUFFER
   BEGIN KEY DUP ISBLANK IF DROP TRUE ELSE WORDBUFFER# APPEND FALSE THEN UNTIL
   WORDBUFFER# PUSHSTR 
 ;
-
+S" Preword" UARTLINE
 ( backpatch word to actually execute nword )
 BACKPATCH NWORD WORD
 
@@ -694,7 +718,7 @@ BACKPATCH NWORD WORD
 \ : COPY_HISTORY HISTORY_BUF TIB# 256 CMOVE ;
 \ : PUSH_HISTORY TIB# HISTORY_BUF 256 CMOVE ;
 
-
+S" INTIB" UARTLINE
 256 BUFFER TIB#
 TIB# 1+ CONSTANT TIB
 VARIABLE TIB_CURSOR 
@@ -746,7 +770,7 @@ VARIABLE TABPTR
 : FLUSH_IN . ; \ backpatch this later
 : FLUSH_OUT . ; \ backpatch this later
 
-
+S" LINEKEY" UARTLINE
 ( make line buffered input the outer interpreter )
 : LINE_KEY
     ( get some characters )
@@ -762,7 +786,7 @@ VARIABLE TABPTR
 \ up/down buffer
 \ tab completion
 
-
+S" STATUS" UARTLINE
 
 : STATUS  ." HERE:0x" HERE @ .HEX  ." LATEST:0x" LATEST @ .HEX  2 SPACES ." R0:0x" R0 .HEX  ." RSP:0x" RSP@ .HEX 2 SPACES ." DSP:0x" DSP@ .HEX  ." S0:0x" S0 @ .HEX  CR ;
 
